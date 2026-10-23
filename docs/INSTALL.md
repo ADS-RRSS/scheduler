@@ -10,7 +10,7 @@ Todo pasa por `make`. `make` a secas enseña la lista.
 | Probarlo sin cuenta de Zernio            | `make demo` (o `make docker-demo`)                   |
 | Llevarme mi instalación a otro Mac       | `make snapshot` aquí → `make restore FILE=…` allí    |
 | Tenerlo siempre encendido (VPS, mini-PC) | `make docker-up`                                     |
-| Tests y lint, como CI                    | `make check` (o `make docker-test`, dentro de Linux) |
+| Tests y lint                             | `make check` (o `make docker-test`, dentro de Linux) |
 
 ---
 
@@ -32,9 +32,6 @@ make run                  # → http://127.0.0.1:8787
 `3.11` o el de Homebrew antes de crear el entorno, y si encuentra un `.venv`
 hecho con un Python viejo —o con uno que `brew upgrade` ya se llevó— lo vuelve a
 crear. Si no hay ninguno válido, lo dice y sugiere `brew install python@3.13`.
-
-**Los tests prueban las dos puntas**: CI los pasa con Python 3.11 (el mínimo) y
-3.13 (el de diario), también dentro de la imagen Docker.
 
 ### `make doctor`
 
@@ -202,13 +199,8 @@ proyecto, no dentro de la imagen.)
 
 ---
 
-## CI
+## Tests
 
-`.github/workflows/ci.yml`, en cada push a `main` y `dev` y en cada pull request:
-
-- **Tests** con Python 3.11 y 3.13: `ruff check` y `pytest` (con ffmpeg, contra
-  el Zernio falso: nada sale a internet).
-- **Imagen Docker**: los tests dentro de la imagen y una prueba de humo de la app
-  (arranca y responde en `/api/health`).
-
-En local, lo mismo: `make check` y `make docker-test`.
+No hay CI: se pasan en local con `make check` (`ruff check` y `pytest`, contra
+el Zernio falso: nada sale a internet) y `make docker-test` (los mismos dentro
+de la imagen Docker).

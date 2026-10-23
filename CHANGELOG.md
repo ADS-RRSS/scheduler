@@ -103,6 +103,11 @@
   y solo cuenta los vídeos y los `.txt`; `.json`, `.sh` y cualquier otro archivo
   se ignoran.
 
+### Eliminado
+
+- **CI de GitHub Actions** (`.github/workflows/ci.yml`). Los tests se pasan en
+  local: `make check` y `make docker-test`.
+
 ### Añadido
 
 - **⚡ Publicar ya, fuera de turno, desde la Biblioteca.** El diálogo

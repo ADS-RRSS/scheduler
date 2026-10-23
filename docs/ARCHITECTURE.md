@@ -432,8 +432,8 @@ tests/
                             369
 ```
 
-`make check` (ruff + pytest) es lo que corre CI en Python 3.11 y 3.13, y
-`make docker-test` lo mismo dentro de la imagen.
+`make check` (ruff + pytest) pasa los tests en local, y `make docker-test` lo
+mismo dentro de la imagen.
 
 `tools/mock_zernio.py` no es un doble complaciente: exige el `Bearer` correcto,
 un `Content-Length` explícito en la subida presignada, que el archivo esté

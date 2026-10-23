@@ -461,12 +461,9 @@ llama la atención venga de donde venga. Los presets están en rangos sensatos.
 ## Tests
 
 ```bash
-make test       # pytest; make lint (ruff) y make check (los dos, como CI)
+make test       # pytest; make lint (ruff) y make check (los dos)
 make docker-test   # lo mismo dentro de la imagen Docker (Linux)
 ```
-
-CI (GitHub Actions) los pasa en cada push con Python 3.11 y 3.13, y también
-dentro de la imagen Docker.
 
 Incluyen el flujo completo contra un Zernio simulado (`tools/mock_zernio.py`),
 que exige el `Bearer` correcto, la subida presignada con `Content-Length`, los

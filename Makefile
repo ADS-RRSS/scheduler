@@ -81,7 +81,7 @@ test: dev ## Tests (pytest, con un Zernio falso: nada sale a internet)
 lint: dev ## Errores de código (ruff; ver ruff.toml)
 	$(PY) -m ruff check app tools tests
 
-check: lint test ## lint + tests: lo mismo que ejecuta CI
+check: lint test ## lint + tests
 
 ##@ Docker (opcional: VPS o equipo siempre encendido, entorno fijado)
 
@@ -109,7 +109,7 @@ docker-logs: ## Sigue los logs del contenedor
 docker-shell: ## Una terminal dentro del contenedor
 	$(COMPOSE) exec app bash
 
-docker-test: docker-check ## Los tests dentro de la imagen (Linux), como CI
+docker-test: docker-check ## Los tests dentro de la imagen (Linux)
 	docker build --target test -t scheduler:test .
 	docker run --rm scheduler:test
 
