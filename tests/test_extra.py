@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.db import session_scope
 from app.models import Schedule, VideoItem, VideoStatus
+from app.scheduler.planner import OPENING_SPREAD_MINUTES
 from app.services import delegation
 from tests.helpers import (
     ACCOUNT_2,
@@ -149,6 +150,12 @@ async def _publish_at(client, queue_id: int, library_id: int, when: datetime):
                              json={"library_ids": [library_id], "publish_at": when.isoformat()})
 
 
+def _same_opening(new: datetime, old: datetime) -> bool:
+    """A video waiting for a day's opening draws its minute in the opening spread
+    again on every replan; what must hold is that it waits for the same opening."""
+    return abs(new - old) <= timedelta(minutes=OPENING_SPREAD_MINUTES)
+
+
 async def test_a_chosen_hour_goes_to_zernio_and_the_queue_keeps_its_rhythm(client, sample_video):
     await reset_mock()
     account_id = await make_account(client)
@@ -164,14 +171,16 @@ async def test_a_chosen_hour_goes_to_zernio_and_the_queue_keeps_its_rhythm(clien
     slot = _video("siguiente.mp4").scheduled_at
     assert slot > datetime.now(timezone.utc) + timedelta(minutes=20)
 
-    when = (datetime.now(timezone.utc) + timedelta(hours=5)).replace(second=0, microsecond=0)
+    # The same day as the queue's next video: a chosen hour that took a day of
+    # the budget would push that video to the day after.
+    when = (slot + timedelta(hours=1)).replace(second=0, microsecond=0)
     extra = await upload_to_library(client, _variant(sample_video, "programado.mp4", b"\x07"))
     resp = await _publish_at(client, queue_id, extra["id"], when)
     assert resp.status_code == 200, resp.text
     assert "programados en Zernio" in resp.json()["message"]
     (added,) = resp.json()["added"]
     assert added["extra"] is True and added["status"] == "DELEGATED"
-    assert _video("siguiente.mp4").scheduled_at == slot, "el siguiente no pierde su hora"
+    assert _same_opening(_video("siguiente.mp4").scheduled_at, slot), "el siguiente no pierde su hora"
 
     await drain(account_id)
     posts = [p for p in (await mock_state())["posts"].values()
@@ -181,7 +190,7 @@ async def test_a_chosen_hour_goes_to_zernio_and_the_queue_keeps_its_rhythm(clien
     video = _video("programado.mp4")
     assert video.status == VideoStatus.DELEGATED and video.zernio_post_id
     # Outside the budget: the daily cap of one still has room for the queue's own.
-    assert _video("siguiente.mp4").scheduled_at == slot
+    assert _same_opening(_video("siguiente.mp4").scheduled_at, slot)
 
 
 async def test_a_chosen_hour_in_the_past_or_without_zone_is_refused(client, sample_video):
