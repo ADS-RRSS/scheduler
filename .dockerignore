@@ -1,0 +1,25 @@
+# Lo que nunca entra en la imagen: tus datos, tus vídeos, tus claves.
+# (Se montan como volúmenes desde el proyecto: ver docker-compose.yml.)
+.env
+.env.*
+!.env.example
+.secrets
+data/*
+media
+# …salvo el banco de temas de los hashtags, que es parte de la app.
+!data/hashtags.json
+
+# Ni lo que se reconstruye o no hace falta para ejecutarla.
+.git
+.github
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.idea
+.vscode
+**/.DS_Store
+*.log
+docs

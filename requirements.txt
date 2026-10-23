@@ -1,0 +1,11 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+pydantic==2.10.4
+pydantic-settings==2.7.0
+httpx==0.28.1
+cryptography==44.0.0
+python-multipart==0.0.20
+tzdata==2024.2
+# Transcripción local para los textos automáticos (CTranslate2; ~200 MB de wheels)
+faster-whisper==1.2.1

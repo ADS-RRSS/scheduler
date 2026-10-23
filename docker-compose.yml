@@ -1,0 +1,87 @@
+# Scheduler en Docker. Lo normal es no escribir nada de esto a mano:
+#   make docker-up · make docker-logs · make docker-down · make docker-demo
+#
+# Usa los mismos data/, media/ y .secrets/ que la instalación nativa, así que se
+# puede pasar de una a otra sin mover nada. Nunca las dos a la vez: la segunda
+# se niega a arrancar (una sola copia puede usar la base de datos).
+
+name: scheduler
+
+services:
+  app:
+    build:
+      context: .
+      target: app
+    image: scheduler:local
+    # Fijo: el candado de la base de datos reconoce así un reinicio del contenedor.
+    hostname: scheduler
+    init: true
+    restart: unless-stopped
+    # Tu usuario (make lo rellena): lo que escribe en data/ y media/ es tuyo.
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8787"
+      # Ollama corre en el Mac, con la GPU; dentro de Docker no la tendría.
+      OLLAMA_URL: ${DOCKER_OLLAMA_URL:-http://host.docker.internal:11434}
+      # Los nombres con los que se abre la app (contra el DNS rebinding). En un
+      # VPS detrás de un dominio: DOCKER_ALLOWED_HOSTS=tu.dominio
+      ALLOWED_HOSTS: ${DOCKER_ALLOWED_HOSTS:-127.0.0.1,localhost}
+      TZ: ${TZ:-Europe/Madrid}
+    ports:
+      # Sólo desde este equipo. Para abrirlo a la red: quita 127.0.0.1 y pon
+      # UI_PASSCODE en .env (las páginas de administración muestran API keys).
+      - "127.0.0.1:${PORT:-8787}:8787"
+    volumes:
+      - ./data:/app/data
+      - ./media:/app/media
+      - ./.secrets:/app/.secrets
+    extra_hosts:
+      # En Linux (un VPS), host.docker.internal no existe por sí solo.
+      - "host.docker.internal:host-gateway"
+
+  # --- Demo: make docker-demo → http://127.0.0.1:8790 -------------------- #
+  # Un Zernio y un Ollama falsos (tools/mock_zernio.py) y datos propios en
+  # volúmenes: nada toca tu biblioteca ni tu base de datos, nada sale a internet.
+  mock-zernio:
+    profiles: [ demo ]
+    image: scheduler:local
+    build:
+      context: .
+      target: app
+    command: [ "python", "tools/mock_zernio.py" ]
+    environment:
+      MOCK_HOST: 0.0.0.0
+    # El de la imagen mira la app (/api/health), que aquí no está.
+    healthcheck:
+      disable: true
+
+  demo:
+    profiles: [ demo ]
+    image: scheduler:local
+    depends_on: [ mock-zernio ]
+    init: true
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8790"
+      ZERNIO_API_BASE: http://mock-zernio:8899/v1
+      OLLAMA_URL: http://mock-zernio:8899
+      OLLAMA_MODEL: ""
+      CAPTION_SHEET_CHECK_SECONDS: "0"
+      SCHEDULER_TICK_SECONDS: "5"
+      STATUS_POLL_SECONDS: "2"
+      ALLOWED_HOSTS: 127.0.0.1,localhost
+    ports:
+      - "127.0.0.1:8790:8790"
+    volumes:
+      - demo-data:/app/data
+      - demo-media:/app/media
+      - demo-secrets:/app/.secrets
+
+volumes:
+  demo-data:
+  demo-media:
+  demo-secrets:

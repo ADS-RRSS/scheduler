@@ -1,0 +1,13 @@
+# ruff check (make lint): errores de verdad, no estilo. Sin formateador: el
+# código tiene su propio estilo y no se reescribe entero por una herramienta.
+target-version = "py311"
+line-length = 110
+extend-exclude = [".venv", "data", "media"]
+
+[lint]
+# Pyflakes (nombres sin usar o sin definir, imports rotos…) y errores de sintaxis.
+select = ["F", "E9"]
+
+[lint.per-file-ignores]
+# Los fixtures de pytest se importan para inyectarlos por nombre.
+"tests/**" = ["F401", "F811"]

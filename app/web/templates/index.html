@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>Scheduler</title>
+    <link href="/static/app.css" rel="stylesheet">
+    <!-- The saved width goes on before the first paint, so a reload does not flash the default one. -->
+    <script>
+        try {
+            const w = localStorage.getItem("tts.uiWidth");
+            if (w === "1.5" || w === "2") document.documentElement.dataset.width = w;
+        } catch (e) { /* storage blocked: the default width */
+        }
+    </script>
+</head>
+<body>
+<header class="topbar">
+    <!-- The logo is the way to Resumen: it has no menu entry of its own. -->
+    <a aria-label="Resumen" class="brand" href="#/resumen" id="brand" title="Resumen: todas las cuentas">
+        <span class="logo">◆</span>
+        <span>TikTok&nbsp;Scheduler</span>
+    </a>
+    <nav class="mainnav" id="mainnav">
+        <a data-page="biblioteca" href="#/biblioteca">Biblioteca <span class="pill" hidden
+                                                                       id="pill-library">0</span></a>
+        <a data-page="cola" href="#/cola">Cola <span class="pill" id="pill-queue">0</span></a>
+        <a data-page="programacion" href="#/programacion">Programación</a>
+        <a data-page="calendario" href="#/calendario">Calendario</a>
+        <div class="navmenu" data-pages="analiticas comentarios actividad" id="nav-seguimiento">
+            <button aria-controls="nav-seguimiento-panel" aria-expanded="false" aria-haspopup="menu"
+                    class="navmenu-toggle" type="button">
+                Seguimiento <span class="pill" hidden id="pill-seguimiento">0</span>
+                <span aria-hidden="true" class="caret">▾</span>
+            </button>
+            <div class="navmenu-panel" hidden id="nav-seguimiento-panel" role="menu">
+                <a data-page="analiticas" href="#/analiticas" role="menuitem">Analíticas</a>
+                <a data-page="comentarios" href="#/comentarios" role="menuitem">Comentarios
+                    <span class="pill" hidden id="pill-comments">0</span></a>
+                <a data-page="actividad" href="#/actividad" role="menuitem">Actividad</a>
+            </div>
+        </div>
+        <a data-page="cuentas" href="#/cuentas">Cuentas</a>
+        <a data-page="db" href="#/db">Base de datos</a>
+        <a data-page="ajustes" href="#/ajustes">Ajustes</a>
+    </nav>
+    <div class="topbar-right">
+        <div aria-label="Ancho de la interfaz" class="width-switch" id="width-switch" role="group"
+             title="Ancho de la interfaz">
+            <button data-width="1" type="button">1×</button>
+            <button data-width="1.5" type="button">1,5×</button>
+            <button data-width="2" type="button">2×</button>
+        </div>
+        <select class="account-select" hidden id="account-switch" title="Cuenta activa"></select>
+        <button class="btn btn-ghost btn-sm" hidden id="pause-btn" type="button"></button>
+        <span class="dot" id="health-dot" title="Estado del planificador"></span>
+    </div>
+</header>
+
+<div class="banner" hidden id="banner"></div>
+
+<main id="main">
+
+    <!-- ============ Queue bar (moved between Cola and Programación) ============ -->
+    <div class="queue-bar" hidden id="queue-bar">
+        <div class="queue-tabs" id="queue-tabs"></div>
+        <button class="btn btn-ghost btn-sm" id="queue-add" title="Añadir otra cola a esta cuenta" type="button">+ Nueva
+            cola
+        </button>
+    </div>
+
+    <!-- ============ Connect form (moved between Onboarding and Cuentas) ============ -->
+    <div class="card connect-form" hidden id="connect-form">
+        <h2>Conectar cuentas de TikTok a través de Zernio</h2>
+        <ol class="muted small steps">
+            <li>Crea una cuenta gratis en <a href="https://zernio.com" rel="noopener" target="_blank">zernio.com</a>
+                y conecta allí tu TikTok (<em>Connect account → TikTok</em>). Las dos primeras cuentas son gratis.
+            </li>
+            <li>En Zernio: <em>Dashboard → API keys → Create</em>. Copia la clave.</li>
+            <li>Pégala aquí y elige qué cuentas de TikTok quieres gestionar. La clave se guarda cifrada en
+                tu disco y sólo viaja hacia Zernio.
+            </li>
+        </ol>
+        <label class="block-field">API key de Zernio
+            <input autocomplete="off" id="connect-key" placeholder="zrn_…" type="password">
+        </label>
+        <div class="actions-bar">
+            <button class="btn btn-ghost btn-sm" id="connect-lookup" type="button">Buscar mis cuentas de TikTok</button>
+            <span class="muted small" id="connect-status"></span>
+        </div>
+        <div hidden id="connect-pick">
+            <div class="pick-list" id="connect-accounts"></div>
+            <div class="actions-bar">
+                <button class="btn btn-primary btn-sm" id="connect-submit" type="button">Conectar seleccionadas</button>
+                <button class="btn btn-ghost btn-sm" id="connect-cancel" type="button">Cancelar</button>
+            </div>
+        </div>
+        <p class="muted small">Detalles, límites y letra pequeña en <code>docs/ZERNIO.md</code>.</p>
+    </div>
+
+    <!-- ============ Onboarding ============ -->
+    <section class="page" data-page="onboarding" hidden>
+        <div class="card card-center">
+            <h1>Publica en TikTok sin tocar nada</h1>
+            <p class="muted">
+                Sube tus vídeos a la biblioteca, pásalos a una cola, define cada cuánto y cuántos al día,
+                y la herramienta los publica sola a través de Zernio: sin app de TikTok propia, sin
+                revisión, en público.
+            </p>
+            <div class="req-list" id="onboarding-requirements"></div>
+        </div>
+        <div id="onboarding-form-slot"></div>
+    </section>
+
+    <!-- ============ Resumen ============ -->
+    <section class="page" data-page="resumen" hidden>
+        <div class="page-head page-head-row">
+            <div>
+                <h1>Resumen</h1>
+                <p class="muted small">Todas las cuentas de un vistazo. Pulsa una para trabajar con ella.</p>
+            </div>
+            <div aria-label="Plataforma" class="chips platform-chips" id="overview-platforms" role="group"></div>
+        </div>
+        <div class="overview-totals" id="overview-totals"></div>
+        <div class="overview" id="overview-cards"></div>
+        <div class="card">
+            <div class="queue-head">
+                <h2>Próximas publicaciones</h2>
+                <a class="btn btn-ghost btn-sm" href="#/calendario">Ver la semana en el calendario</a>
+            </div>
+            <div class="preview-list" id="overview-upcoming"></div>
+        </div>
+        <div class="card">
+            <h2>Última actividad</h2>
+            <div class="event-list compact" id="overview-events"></div>
+        </div>
+    </section>
+
+    <!-- ============ Biblioteca ============ -->
+    <section class="page" data-page="biblioteca" hidden>
+        <div class="page-head">
+            <h1>Biblioteca</h1>
+            <p class="muted small">
+                Cada vídeo se sube una sola vez, aunque salga en TikTok y en YouTube. Al entrar se
+                escriben sus textos para las dos plataformas —título, descripción, hashtags y
+                comentario fijado— y cada cola copia los de la suya cuando lo añades. Cada vídeo va
+                a la carpeta de su serie: <code>reel_07_pensamientos-estoicos_…</code> a
+                <code>pensamientos-estoicos</code>.
+            </p>
+        </div>
+        <div class="card">
+            <div class="dropzone" id="lib-dropzone">
+                <input hidden id="lib-folder-input" multiple type="file" webkitdirectory>
+                <input accept="video/mp4,video/quicktime,video/webm,.txt,text/plain,.jpg,.jpeg,.png" hidden
+                       id="lib-file-input" multiple type="file">
+                <strong>Arrastra aquí una carpeta, varias o sus archivos</strong>
+                <span class="muted small">
+                    Se suben los .mp4, .mov y .webm, cada uno con el .txt del mismo nombre (su texto o
+                    la ficha de ContentBuilder) y su portada <code>.jpg</code> o
+                    <code>_portada.jpg</code>, que YouTube recibe como miniatura. De una carpeta solo cuentan sus archivos directos:
+                    las subcarpetas (visibles u ocultas) y lo demás se ignoran, salvo si no tiene
+                    ninguno: entonces cuenta cada subcarpeta como una carpeta. Con varias carpetas
+                    eliges a dónde van: cada una a la suya, todas a una que ya existe o a una nueva.
+                </span>
+                <div class="actions-bar center">
+                    <button class="btn btn-primary btn-sm" id="lib-pick-folder" type="button">
+                        Elegir carpeta…
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="lib-pick-many" type="button">
+                        Varias carpetas…
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="lib-pick-files" type="button">
+                        Elegir archivos…
+                    </button>
+                </div>
+            </div>
+            <label class="switch-row lib-ai-switch">
+                <span>
+                    <strong>Reescribir los textos con IA</strong>
+                    <span class="muted small block" id="lib-ai-hint">
+                        Apagado, cada vídeo con su ficha .txt de ContentBuilder sale con los textos que
+                        trae para TikTok y para YouTube —título, descripción, hashtags y comentario
+                        fijado—, tal cual y sin escuchar el vídeo. Encendido, Ollama los escribe de
+                        nuevo a partir de la ficha. Los vídeos sin ficha se escuchan y se escriben
+                        siempre. Vale para lo que entre a partir de ahora.
+                    </span>
+                </span>
+                <input class="switch" id="lib-ai" type="checkbox">
+            </label>
+            <div class="progress lib-progress" hidden id="lib-progress">
+                <div class="progress-bar" id="lib-bar"></div>
+            </div>
+            <div class="actions-bar">
+                <span class="muted small" id="lib-upload-status"></span>
+                <span class="toolbar-end">
+                    <button class="btn btn-ghost btn-sm" id="lib-scan"
+                            title="Registrar los vídeos copiados a mano en media/library" type="button">
+                        Buscar en media/library
+                    </button>
+                </span>
+            </div>
+        </div>
+
+        <div class="lib-grid">
+            <aside class="card lib-side">
+                <h2>Carpetas</h2>
+                <input aria-label="Buscar carpeta" id="lib-folder-q" placeholder="Buscar carpeta…" type="search">
+                <div class="lib-label-filter" hidden id="lib-label-filter"></div>
+                <div class="lib-folders" id="lib-folders"></div>
+                <p class="muted small" id="lib-totals"></p>
+            </aside>
+            <div class="lib-main">
+                <div aria-label="Cuentas" class="chips lib-accounts" hidden id="lib-accounts" role="group"></div>
+                <div class="toolbar">
+                    <label class="check"><input id="lib-select-all" type="checkbox"></label>
+                    <h2 id="lib-folder-title">Biblioteca</h2>
+                    <span class="folder-labels" id="lib-folder-labels"></span>
+                    <button class="btn btn-ghost btn-sm" hidden id="lib-labels"
+                            title="Etiquetas de la carpeta, para reconocerla y filtrar por ellas"
+                            type="button">🏷️ Etiquetas
+                    </button>
+                    <button class="btn btn-ghost btn-sm" hidden id="lib-rename"
+                            title="Cambiar el nombre de la carpeta en disco y en la base de datos"
+                            type="button">✏️ Renombrar
+                    </button>
+                    <input aria-label="Buscar entre estos vídeos" id="lib-q" placeholder="Buscar en estos vídeos…"
+                           title="Por nombre de archivo, carpeta o textos, entre los vídeos de la carpeta o de las carpetas y etiquetas elegidas"
+                           type="search">
+                    <select aria-label="Filtrar por cola" id="lib-queue"></select>
+                    <select aria-label="Filtrar por textos" id="lib-text-filter">
+                        <option value="">Cualquier texto</option>
+                        <option value="written">✓ Ya escritos</option>
+                        <option value="writing">✍️ Escribiéndose</option>
+                        <option value="failed">⚠ Fallidos</option>
+                    </select>
+                    <label class="check"
+                           title="Sólo los vídeos cuyos textos tienen algo que corregir (errores o avisos de la revisión)">
+                        <input id="lib-issues" type="checkbox"> Con avisos
+                    </label>
+                    <span class="muted small" id="lib-summary"></span>
+                    <div class="toolbar-end">
+                        <button class="btn btn-primary btn-sm" id="lib-add" type="button">
+                            Añadir a una cola…
+                        </button>
+                        <button class="btn btn-ghost btn-sm" id="lib-rewrite"
+                                title="Ollama vuelve a escribir los textos de TikTok y YouTube" type="button">
+                            Reescribir textos
+                        </button>
+                        <button class="btn btn-ghost btn-sm" id="lib-sheet"
+                                title="Los textos de TikTok y YouTube que trae su ficha .txt de ContentBuilder, tal cual"
+                                type="button">📄 Textos de la ficha
+                        </button>
+                        <button class="btn btn-ghost btn-sm" id="lib-tags"
+                                title="Añadir o quitar hashtags en los seleccionados o en toda la carpeta"
+                                type="button"># Hashtags…
+                        </button>
+                        <button class="btn btn-ghost btn-sm" id="lib-move"
+                                title="Mover los seleccionados, con su .txt y su portada, a otra carpeta o a una nueva"
+                                type="button">📁 Mover…
+                        </button>
+                        <button class="btn btn-ghost btn-sm" id="lib-delete" type="button">Quitar…</button>
+                    </div>
+                </div>
+                <div class="queue-list" id="lib-list"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ Cola ============ -->
+    <section class="page" data-page="cola" hidden>
+        <div id="cola-queue-slot"></div>
+        <div class="card">
+            <div class="queue-head">
+                <div>
+                    <h2>Añadir vídeos</h2>
+                    <p class="muted small" id="queue-target-note"></p>
+                </div>
+                <div class="actions-bar">
+                    <button class="btn btn-primary" id="queue-from-library" type="button">
+                        Añadir desde la biblioteca…
+                    </button>
+                    <a class="btn btn-ghost" href="#/biblioteca">Subir a la biblioteca</a>
+                </div>
+            </div>
+        </div>
+        <div class="card" id="handover-card">
+            <h2 id="handover-title">Mandar la cola entera a Zernio</h2>
+            <p class="muted small">
+                Con la aplicación abierta, publica ella: va soltando los vídeos uno a uno cuando
+                toca. Si prefieres cerrarla, calcula aquí la hora de cada vídeo con las mismas
+                reglas de esta cola y déjalos ya programados en Zernio, que los publicará solo.
+            </p>
+            <div class="actions-bar">
+                <button class="btn btn-primary" id="handover-btn" type="button">
+                    Enviar la cola a Zernio…
+                </button>
+                <button class="btn btn-ghost" hidden id="handover-cancel" type="button">
+                    Recuperar de Zernio
+                </button>
+                <span class="muted small" id="handover-status"></span>
+            </div>
+            <div class="progress" hidden id="handover-progress">
+                <div class="progress-bar" id="handover-bar"></div>
+            </div>
+        </div>
+        <div class="toolbar">
+            <div class="chips" id="queue-filters"></div>
+            <div hidden id="queue-scope"></div>
+            <span class="muted small" id="queue-summary"></span>
+            <div class="toolbar-end">
+                <label class="check" hidden id="queue-select-wrap"
+                       title="Seleccionar todos los vídeos de esta lista que se pueden quitar o recuperar">
+                    <input id="queue-select-all" type="checkbox"> Todos
+                </label>
+                <span class="queue-move-group" hidden id="queue-move-group">
+                    <span class="muted small" id="queue-move-label">Mover:</span>
+                    <button class="btn btn-ghost btn-sm" id="queue-move-top"
+                            title="Los seleccionados pasan a los primeros turnos, juntos y en el orden que tenían"
+                            type="button">⤒ Al principio
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="queue-move-bottom"
+                            title="Los seleccionados pasan a los últimos turnos, juntos y en el orden que tenían"
+                            type="button">⤓ Al final
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="queue-move-to"
+                            title="Los seleccionados pasan, juntos, al turno que escribas"
+                            type="button"># Al turno…
+                    </button>
+                </span>
+                <button class="btn btn-ghost btn-sm" hidden id="queue-remove-selected" type="button">
+                    Quitar seleccionados
+                </button>
+                <button class="btn btn-ghost btn-sm" hidden id="queue-recover-selected" type="button">
+                    Recuperar seleccionados
+                </button>
+                <button class="btn btn-ghost btn-sm" hidden id="queue-unshuffle"
+                        title="Deshacer la mezcla o el orden puesto a mano: los vídeos que esperan vuelven al orden en que entraron"
+                        type="button">Orden de llegada
+                </button>
+                <button class="btn btn-ghost btn-sm" id="queue-shuffle" type="button">🔀 Mezclar</button>
+            </div>
+        </div>
+        <div class="queue-list" id="queue-list"></div>
+    </section>
+
+    <!-- ============ Programación ============ -->
+    <section class="page" data-page="programacion" hidden>
+        <div id="prog-queue-slot"></div>
+        <div class="stat-row" id="stat-row"></div>
+
+        <div class="card">
+            <div class="queue-head">
+                <div>
+                    <h2 id="queue-title">Cola</h2>
+                    <p class="muted small" id="queue-sub"></p>
+                </div>
+                <div class="actions-bar">
+                    <button class="btn btn-ghost btn-sm" id="queue-rename" type="button">Renombrar</button>
+                    <button class="btn btn-ghost btn-sm" id="queue-duplicate"
+                            title="Crear otra cola con estas mismas reglas"
+                            type="button">Duplicar
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="queue-up" title="Subir en el orden" type="button">↑
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="queue-down" title="Bajar en el orden" type="button">↓
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="queue-hide" type="button">🙈 Ocultar</button>
+                    <button class="btn btn-danger btn-sm" id="queue-delete" type="button">Eliminar cola</button>
+                </div>
+            </div>
+            <label class="switch-row">
+        <span>
+          <strong>Programación activa en esta cola</strong>
+          <span class="muted small block">
+            Cuando está activa, los vídeos de <em id="queue-name-inline">esta cola</em> salen
+            solos según las reglas de abajo. Cada cola se activa por separado.
+          </span>
+        </span>
+                <input class="switch" id="sch-enabled" type="checkbox">
+            </label>
+            <div class="start-row">
+                <span>
+                    <strong>Empezar a publicar</strong>
+                    <span class="muted small block" id="start-hint">
+                        Hasta ese día la cola no reserva ninguna hora; desde ese día publica sola.
+                    </span>
+                </span>
+                <div class="start-controls">
+                    <div class="chips" id="start-presets"></div>
+                    <div id="start-pick"></div>
+                    <input id="sch-start" type="hidden">
+                    <input id="sch-start-time" type="hidden">
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-quiet">
+            <p class="muted small">
+                Esta cola comparte cuenta con las demás:
+                <strong id="acc-limits-summary">—</strong>.
+                TikTok cuenta las publicaciones por cuenta, no por cola, así que ese techo manda
+                sobre lo que pongas aquí abajo. Las colas publican a la vez, intercalando sus
+                vídeos; la separación mínima es lo que impide que dos queden pegadas, tanto dentro
+                de una cola como entre colas distintas.
+                <a href="#/cuentas" id="acc-limits-link">Cambiarlo en Cuentas</a>.
+            </p>
+            <div class="warn-list" id="acc-warnings"></div>
+        </div>
+
+        <div class="card">
+            <h2>1 · Cada cuánto se publica</h2>
+            <p class="muted small">
+                Se elige un tiempo aleatorio dentro del rango en cada publicación, para no
+                dejar un patrón exacto.
+            </p>
+            <div class="chips" id="interval-presets"></div>
+            <div class="inline-fields">
+                <label>Mínimo <input id="sch-int-min" max="10080" min="1" type="number"> min</label>
+                <label>Máximo <input id="sch-int-max" max="10080" min="1" type="number"> min</label>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>2 · Máximo de vídeos al día <span class="tag">esta cola</span></h2>
+            <p class="muted small">
+                Se cuenta por día natural en la zona horaria elegida, sólo para esta cola. El techo
+                de la cuenta manda siempre: si las colas suman más, se quedan cortas.
+            </p>
+            <div class="inline-fields">
+                <label class="check"><input id="sch-nomax" type="checkbox"> Sin máximo</label>
+                <label>Máximo <input id="sch-max" max="200" min="0" type="number"> vídeos/día</label>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>3 · Franja horaria</h2>
+            <p class="muted small">
+                Por defecto <strong>indiferente</strong>: sólo manda el máximo diario. Es lo que
+                separa una cola de otra: 10:00–22:00 en una y 22:00–10:00 en la siguiente.
+            </p>
+            <div class="chips" id="window-presets"></div>
+            <div class="window-list" id="window-list"></div>
+            <div class="inline-fields">
+                <label>Desde <input id="win-start" type="time" value="09:00"></label>
+                <label>Hasta <input id="win-end" type="time" value="22:00"></label>
+                <button class="btn btn-ghost btn-sm" id="win-add" type="button">Añadir franja</button>
+            </div>
+            <div class="field-row">
+                <label>Zona horaria
+                    <select id="sch-tz">
+                        <option value="Europe/Madrid">Europe/Madrid</option>
+                        <option value="Atlantic/Canary">Atlantic/Canary</option>
+                        <option value="Europe/London">Europe/London</option>
+                        <option value="America/Mexico_City">America/Mexico_City</option>
+                        <option value="America/Argentina/Buenos_Aires">America/Buenos_Aires</option>
+                        <option value="America/Bogota">America/Bogota</option>
+                        <option value="UTC">UTC</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>4 · Días de la semana</h2>
+            <div class="chips" id="day-chips"></div>
+        </div>
+
+        <div class="card">
+            <h2>5 · Cómo se publica</h2>
+            <div class="note note-info">
+                Todo sale <strong>en público y directo</strong>. Es lo único que publica la app de TikTok
+                for Business, que es por donde conecta Zernio.
+            </div>
+
+            <p class="muted small options-title">Interacciones · las permitidas por defecto, desmarca lo que quieras
+                bloquear</p>
+            <div class="checks">
+                <label class="check"><input id="sch-nocomment" type="checkbox"> Desactivar comentarios</label>
+                <label class="check"><input id="sch-noduet" type="checkbox"> Desactivar dúos</label>
+                <label class="check"><input id="sch-nostitch" type="checkbox"> Desactivar stitch</label>
+            </div>
+
+            <label class="switch-row switch-row-compact">
+        <span>
+          <strong>Marcar el contenido como generado por IA</strong>
+          <span class="muted small block">
+            Cada vídeo que entre en esta cola nace con la etiqueta de IA de TikTok puesta;
+            en la Cola puedes quitársela a uno suelto con el botón <code>🤖 IA</code>.
+            Cambiarlo aquí sólo afecta a los vídeos que entren a partir de ahora.
+          </span>
+        </span>
+                <input class="switch" id="sch-aigc" type="checkbox">
+            </label>
+
+            <div class="disclosure">
+                <label class="switch-row">
+          <span>
+            <strong>Declarar contenido comercial</strong>
+            <span class="muted small block">
+              Actívalo si los vídeos promocionan tu propia marca o una colaboración pagada.
+            </span>
+          </span>
+                    <input class="switch" id="sch-disclose" type="checkbox">
+                </label>
+                <div class="checks" hidden id="disclose-options">
+                    <label class="check">
+                        <input id="sch-brand-organic" type="checkbox"> Tu marca
+                        <span class="muted small">· se etiquetará «Contenido promocional»</span>
+                    </label>
+                    <label class="check">
+                        <input id="sch-brand-content" type="checkbox"> Contenido de marca
+                        <span class="muted small">· se etiquetará «Colaboración pagada»</span>
+                    </label>
+                </div>
+                <p class="muted small" hidden id="disclose-hint"></p>
+            </div>
+            <p class="muted small consent" id="consent-text"></p>
+        </div>
+
+        <div class="warn-list" id="sch-warnings"></div>
+
+        <div class="actions-bar">
+            <button class="btn btn-primary" id="sch-save" type="button">Guardar programación</button>
+            <button class="btn btn-ghost" id="sch-preview" type="button">Ver próximas publicaciones</button>
+            <span class="muted small" id="sch-status"></span>
+        </div>
+
+        <div class="card" hidden id="preview-card">
+            <h2>Próximas publicaciones (simulación)</h2>
+            <p class="muted small">Simulación con las reglas actuales y la cola de hoy. No publica nada.</p>
+            <div class="preview-list" id="preview-list"></div>
+        </div>
+    </section>
+
+    <!-- ============ Calendario ============ -->
+    <section class="page" data-page="calendario" hidden>
+        <div class="page-head page-head-row">
+            <div>
+                <h1>Calendario</h1>
+                <p class="muted small">
+                    La semana de todas las cuentas: lo publicado, lo que ya está en Zernio y lo que
+                    darían las reglas de cada cola a lo que espera. Cada cuenta va en su carril, así
+                    que los huecos —y dos cuentas a la misma hora— se ven de un vistazo.
+                </p>
+            </div>
+            <div aria-label="Plataforma" class="chips platform-chips" id="cal-platforms" role="group"></div>
+        </div>
+        <div class="card cal-card">
+            <div class="toolbar cal-toolbar">
+                <button aria-label="Semana anterior" class="btn btn-ghost btn-sm" id="cal-prev" type="button">←</button>
+                <button class="btn btn-ghost btn-sm" id="cal-today" type="button">Esta semana</button>
+                <button aria-label="Semana siguiente" class="btn btn-ghost btn-sm" id="cal-next" type="button">→
+                </button>
+                <h2 id="cal-range">…</h2>
+                <label class="check"
+                       title="Lo que darían las reglas de cada cola a los vídeos que esperan (una simulación)">
+                    <input checked id="cal-projected" type="checkbox"> Previstos
+                </label>
+                <span class="muted small" id="cal-status"></span>
+            </div>
+            <div class="cal-legend" id="cal-legend"></div>
+            <div class="warn-list" id="cal-notes"></div>
+            <div class="cal-scroll">
+                <div class="cal-grid" id="cal-grid"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ Analíticas ============ -->
+    <section class="page" data-page="analiticas" hidden>
+        <div class="card">
+            <h2>Cómo funcionaron tus vídeos</h2>
+            <p class="muted small">
+                Datos de TikTok a través de Zernio. Se actualizan solos cada pocas horas; las vistas de
+                perfil y el % de vídeo visto tardan de 24 a 48 h en aparecer.
+            </p>
+            <div class="actions-bar">
+                <button class="btn btn-ghost btn-sm" id="an-refresh" type="button">Actualizar ahora</button>
+                <span class="muted small" id="an-status"></span>
+            </div>
+        </div>
+
+        <div class="stat-grid" id="an-totals"></div>
+
+        <div class="card">
+            <h2>A qué hora rinde mejor</h2>
+            <p class="muted small">
+                Media de reproducciones por hora de publicación, en tu zona horaria. Sólo cuentan las
+                horas con al menos 3 vídeos detrás.
+            </p>
+            <div class="bars" id="an-hours"></div>
+            <div class="note note-info" hidden id="an-best"></div>
+        </div>
+
+        <div class="card">
+            <h2>Y qué día</h2>
+            <div class="bars" id="an-weekdays"></div>
+        </div>
+
+        <div class="card">
+            <h2>Qué hashtags funcionan</h2>
+            <p class="muted small">
+                Media de reproducciones de los vídeos que salieron con cada hashtag. Los que tienen
+                3 o más vídeos detrás cuentan para elegir los siguientes; los demás, todavía no.
+            </p>
+            <div class="bars" id="an-hashtags"></div>
+        </div>
+
+        <div class="card">
+            <h2>Mejores vídeos</h2>
+            <div class="rank-list" id="an-top"></div>
+        </div>
+    </section>
+
+    <!-- ============ Comentarios ============ -->
+    <section class="page" data-page="comentarios" hidden>
+        <div class="card">
+            <h2>Comentarios</h2>
+            <p class="muted small">
+                Los de tus vídeos publicados en los últimos días. Se leen solos cada media hora; Zernio
+                los cachea 10 minutos, así que uno recién escrito puede tardar un poco en aparecer.
+            </p>
+            <div class="actions-bar">
+                <button class="btn btn-ghost btn-sm" id="cm-refresh" type="button">Buscar nuevos</button>
+                <select id="cm-account">
+                    <option value="">Todas las cuentas</option>
+                </select>
+                <label class="check"><input id="cm-pending" type="checkbox"> Sólo sin responder</label>
+                <label class="check" title="Los que escribe tu cuenta («Tú»): las preguntas fijadas y tus respuestas">
+                    <input id="cm-mine" type="checkbox"> Mostrar los míos <span class="muted" id="cm-own"></span>
+                </label>
+                <span class="muted small" id="cm-status"></span>
+            </div>
+        </div>
+        <div class="comment-list" id="cm-list"></div>
+    </section>
+
+    <!-- ============ Actividad ============ -->
+    <section class="page" data-page="actividad" hidden>
+        <div class="card">
+            <h2>Actividad</h2>
+            <div class="toolbar">
+                <select id="ev-level">
+                    <option value="">Todos los niveles</option>
+                    <option value="success">Éxitos</option>
+                    <option value="info">Info</option>
+                    <option value="warn">Avisos</option>
+                    <option value="error">Errores</option>
+                </select>
+                <select id="ev-account">
+                    <option value="">Todas las cuentas</option>
+                </select>
+                <input id="ev-q" placeholder="Buscar en los mensajes…" type="search">
+                <button class="btn btn-ghost btn-sm" id="ev-refresh" type="button">Actualizar</button>
+                <span class="muted small" id="ev-count"></span>
+            </div>
+        </div>
+        <div class="event-list" id="event-list"></div>
+    </section>
+
+    <!-- ============ Cuentas ============ -->
+    <section class="page" data-page="cuentas" hidden>
+        <div class="page-head">
+            <h1>Cuentas</h1>
+            <p class="muted small">
+                Cada cuenta de TikTok se conecta una sola vez, con su clave de Zernio. Para publicar
+                con horarios distintos, dale varias <strong>colas</strong>: cada una tiene sus vídeos,
+                sus horas y su ritmo. Una misma API key puede servir para varias cuentas.
+            </p>
+            <div class="actions-bar">
+                <button class="btn btn-primary btn-sm" id="accounts-add" type="button">Añadir cuenta</button>
+            </div>
+        </div>
+        <div id="accounts-form-slot"></div>
+        <div class="accounts-list" id="accounts-list"></div>
+    </section>
+
+    <!-- ============ Base de datos ============ -->
+    <section class="page" data-page="db" hidden>
+        <div class="dbgrid">
+            <aside class="card db-side">
+                <h2>Tablas</h2>
+                <div class="db-tables" id="db-tables"></div>
+                <button class="btn btn-ghost btn-sm" id="db-reload" type="button">Recargar</button>
+            </aside>
+            <div class="db-main">
+                <div class="card" hidden id="db-table-card">
+                    <div class="toolbar">
+                        <h2 id="db-table-title">tabla</h2>
+                        <input id="db-q" placeholder="Buscar en la tabla…" type="search">
+                        <select id="db-perpage">
+                            <option value="25">25</option>
+                            <option selected value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="200">200</option>
+                        </select>
+                        <a class="btn btn-ghost btn-sm" href="#" id="db-export" target="_blank">Exportar CSV</a>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="grid" id="db-grid"></table>
+                    </div>
+                    <div class="toolbar" id="db-pager"></div>
+                    <p class="muted small">Haz clic en una fila para verla y editarla. Las columnas cifradas se muestran
+                        ocultas y no se editan aquí.</p>
+                </div>
+                <div class="card">
+                    <h2>Consola SQL <span class="tag">sólo lectura</span></h2>
+                    <textarea id="sql-text" placeholder="SELECT status, COUNT(*) FROM video_items GROUP BY status"
+                              rows="4"
+                              spellcheck="false"></textarea>
+                    <div class="actions-bar">
+                        <button class="btn btn-primary btn-sm" id="sql-run" type="button">Ejecutar</button>
+                        <label class="muted small">Límite <input class="tiny" id="sql-limit" max="1000" min="1"
+                                                                 type="number" value="200"></label>
+                        <span class="muted small" id="sql-status"></span>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="grid" id="sql-grid"></table>
+                    </div>
+                </div>
+                <div class="card danger-zone">
+                    <h2>Borrar todo</h2>
+                    <p class="muted small">
+                        Vacía todas las tablas y borra de la biblioteca (<code>media/library</code>)
+                        y de <code>media/inbox</code>, <code>media/posted</code> y
+                        <code>media/failed</code> todos los vídeos (.mp4, .mov y .webm) con sus
+                        textos. Nada fuera de esas carpetas se toca.
+                        Antes de borrar se guarda una copia de la base de datos en
+                        <code>data/backups</code>. Hay que superar tres comprobaciones seguidas.
+                    </p>
+                    <div class="wipe-summary" id="wipe-summary"></div>
+                    <div class="actions-bar">
+                        <button class="btn btn-danger" id="wipe-btn" type="button">
+                            Borrar la base de datos y los vídeos…
+                        </button>
+                        <span class="muted small" id="wipe-status"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ Ajustes ============ -->
+    <section class="page" data-page="ajustes" hidden>
+        <div class="card">
+            <h2>Hashtags globales</h2>
+            <p class="muted small">Se mezclan aleatoriamente en el texto cuando uses <code>[hashtags]</code>.</p>
+            <textarea id="set-hashtags" placeholder="#fyp #parati #viral" rows="3"></textarea>
+        </div>
+        <div class="card">
+            <h2>Avisos <span class="tag">opcional</span></h2>
+            <p class="muted small">
+                Una URL de <strong>Discord</strong>, <strong>Slack</strong>, <strong>ntfy</strong>
+                (<code>https://ntfy.sh/tu-tema</code>, push al móvil en 1 minuto) o
+                <strong>Telegram</strong> (<code>https://api.telegram.org/bot…/sendMessage?chat_id=…</code>).
+                Recibirás un aviso al publicar o al fallar cada vídeo.
+            </p>
+            <input id="set-webhook" placeholder="https://ntfy.sh/mi-tema-secreto" type="url">
+            <div class="actions-bar">
+                <button class="btn btn-ghost btn-sm" id="set-webhook-test" type="button">Enviar aviso de prueba</button>
+            </div>
+        </div>
+        <div class="actions-bar">
+            <button class="btn btn-primary" id="set-save" type="button">Guardar ajustes</button>
+            <span class="muted small" id="set-status"></span>
+        </div>
+
+        <div class="card">
+            <h2>Copias de la base de datos</h2>
+            <p class="muted small">
+                Copia consistente de <code>scheduler.db</code> (cola, cuentas, claves cifradas, historial).
+                Se hace una sola cada día y se guardan las últimas; las que hagas a mano no se borran nunca.
+                Para restaurar: para la app y sustituye el archivo. Sin <code>.secrets/encryption.key</code>
+                las claves no se pueden leer: para llevártelo todo a otro Mac, <code>make snapshot</code>.
+            </p>
+            <div class="actions-bar">
+                <button class="btn btn-primary btn-sm" id="backup-create" type="button">Crear copia ahora</button>
+                <span class="muted small" id="backup-status"></span>
+            </div>
+            <div class="backup-list" id="backup-list"></div>
+        </div>
+
+        <div class="card">
+            <h2>Mantenimiento</h2>
+            <div class="maint">
+                <div>
+                    <strong>Registro de actividad</strong>
+                    <span class="muted small block">Recorta el historial dejando sólo las últimas entradas.</span>
+                </div>
+                <div class="actions-bar">
+                    <label class="muted small">Conservar <input class="tiny" id="maint-keep" min="0" type="number"
+                                                                value="500"></label>
+                    <button class="btn btn-ghost btn-sm" id="maint-prune" type="button">Recortar</button>
+                </div>
+            </div>
+            <div class="maint">
+                <div>
+                    <strong>Vídeos fallidos</strong>
+                    <span class="muted small block">Quita de todas las colas los vídeos en estado fallido.
+                        Sus archivos siguen en la biblioteca: se borran desde allí.</span>
+                </div>
+                <div class="actions-bar">
+                    <button class="btn btn-ghost btn-sm" id="maint-clear-failed" type="button">Limpiar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Sistema</h2>
+            <dl class="kv" id="system-info"></dl>
+        </div>
+    </section>
+</main>
+
+<div class="modal" hidden id="modal">
+    <div aria-modal="true" class="modal-card" role="dialog">
+        <div class="modal-head">
+            <h2 id="modal-title">…</h2>
+            <button class="btn btn-ghost btn-sm" id="modal-close" type="button">Cerrar</button>
+        </div>
+        <div id="modal-body"></div>
+    </div>
+</div>
+
+<div class="toast" hidden id="toast"></div>
+<script src="/static/app.js" type="module"></script>
+</body>
+</html>
