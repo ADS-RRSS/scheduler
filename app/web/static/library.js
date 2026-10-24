@@ -116,8 +116,10 @@ function libQueues() {
 }
 
 /** One «📋 En …» entry of a video, under the same rule. */
+/** A use shown under the video: hidden queues and other accounts only hide history. */
 function shownUse(entry) {
-    return !entry.queue_hidden && (!lib.accounts.length || lib.accounts.includes(entry.account_id));
+    return entry.needs_file
+        || (!entry.queue_hidden && (!lib.accounts.length || lib.accounts.includes(entry.account_id)));
 }
 
 function saveScope() {
@@ -325,7 +327,7 @@ function reviewBadge(item) {
 function where(entry) {
     const who = accounts().find((a) => a.account.id === entry.account_id);
     const name = who ? accountLabel(who.account) : PLATFORM_LABEL[entry.platform] || entry.platform;
-    return `${name} · ${entry.queue_name || "sin cola"}`;
+    return `${name} · ${entry.queue_name || "sin cola"}${entry.queue_hidden ? " (oculta)" : ""}`;
 }
 
 /** Open the queue a video is in, filtered so that the video is on screen. */
@@ -2333,6 +2335,11 @@ export function wireLibrary() {
             lib.selected.clear();
             toast(`${res.done} vídeo(s) borrados` + (res.problems.length ? ` · ${res.problems.length} siguen en cola` : ""),
                 res.problems.length > 0);
+            if (res.problems.length) {
+                const body = el("div", "warn-list");
+                res.problems.forEach((p) => body.append(el("div", "note note-warn", p)));
+                openModal("No se borraron", body);
+            }
             await reload();
             await state.refresh();
         } catch (err) {

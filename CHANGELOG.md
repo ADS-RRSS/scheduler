@@ -70,6 +70,13 @@
 
 ### Corregido
 
+- **La base de datos ya no depende del enlace `TikTokScheduler`.** La migración v11
+  reescribe bajo `_RRSS/Scheduler` todas las rutas guardadas con la carpeta antigua
+  (biblioteca y colas, historia incluida). Si el enlace falta, los vídeos con esas
+  rutas ya no dan «El archivo está fuera de la biblioteca» (`legacy_library_dirs`).
+- **«En ninguna cola» y «Borrar» usan la misma regla.** Un vídeo que todavía
+  espera en una cola oculta o de otra cuenta ya cuenta como «en cola»; el error
+  al borrar dice qué cola, de qué cuenta, en qué estado y si está oculta.
 - **Un post que Zernio ya no tiene (404) dejaba la cuenta «procesando» para
   siempre.** Se seguía preguntando por él cada minuto y, mientras, la cuenta no
   publicaba nada. Pasado el plazo normal de espera, el vídeo queda como fallido

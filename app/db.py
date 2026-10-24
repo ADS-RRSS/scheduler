@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -34,7 +35,7 @@ from .models import Base
 
 log = logging.getLogger("scheduler")
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 _VERSION_KEY = "schema_version"
 
 _settings = get_settings()
@@ -186,6 +187,8 @@ def migrate() -> list[str]:
             actions += migrate_v8_to_v9(conn)
         if version < 10:
             actions += migrate_v9_to_v10(conn)
+        if version < 11:
+            actions += migrate_v10_to_v11(conn)
         _set_schema_version(conn, SCHEMA_VERSION)
     if actions:
         log.info("database migrated: %s", "; ".join(actions))
@@ -629,6 +632,50 @@ def _rebased(path: str | None) -> str | None:
         if marker in path:
             candidate = Path(folder) / path.split(marker, 1)[1]
             return str(candidate) if candidate.exists() else None
+    return None
+
+
+# --------------------------------------------------------------------------- #
+# v10 -> v11: no path through the old project folder's link
+# --------------------------------------------------------------------------- #
+
+def migrate_v10_to_v11(conn) -> list[str]:
+    """Rewrite every path saved through the old TikTok Scheduler folder.
+
+    v10 only moved the paths that pointed nowhere; the ones saved through the
+    link that kept the old name worked then and stayed, so the link had to
+    stay too. Now every path under an old media folder (``legacy_library_dirs``
+    and its siblings) is written under this install's, published history
+    included, whether or not the file is still there: the same file, without
+    the link.
+    """
+    tables = _tables(conn)
+    moved = 0
+    for table in ("library_items", "video_items"):
+        if table not in tables:
+            continue
+        for row_id, path in conn.execute(text(f"SELECT id, file_path FROM {table}")).all():
+            new = _out_of_old_project(path)
+            if new is not None and new != path:
+                conn.execute(text(f"UPDATE {table} SET file_path = :path WHERE id = :id"),
+                             {"path": new, "id": row_id})
+                moved += 1
+    return [f"{moved} file path(s) no longer go through the old project folder"] if moved else []
+
+
+def _out_of_old_project(path: str | None) -> str | None:
+    """``path`` under this install's media folders, if it was under an old one."""
+    if not path:
+        return None
+    normal = Path(os.path.normpath(path))
+    for old_library in _settings.legacy_library_dirs:
+        old_media = Path(os.path.normpath(old_library)).parent
+        if not normal.is_relative_to(old_media) or normal == old_media:
+            continue
+        name, *rest = normal.relative_to(old_media).parts
+        for folder in _settings.media_dirs:
+            if rest and Path(folder).name == name:
+                return str(Path(folder, *rest))
     return None
 
 

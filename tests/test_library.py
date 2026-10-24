@@ -433,9 +433,13 @@ async def test_the_library_can_be_filtered_by_queue(client, sample_video, tmp_ro
     assert (await client.get("/api/library/items", params={"queue": "x"})).status_code == 400
 
 
-async def test_hidden_queues_and_other_accounts_do_not_count_in_the_library(
+async def test_hidden_queues_and_other_accounts_only_hide_history_in_the_library(
         client, sample_video, tmp_root):
-    """«Cuentas» narrows «en alguna/ninguna cola»; a hidden queue is out of sight."""
+    """«Cuentas» and hidden queues narrow «en alguna/ninguna cola» to what is done.
+
+    An entry that still needs the file counts wherever it is, the rule «Borrar»
+    follows: «En ninguna cola» never lists a video that cannot be deleted.
+    """
     await reset_mock()
     tiktok, youtube = await _connect_both(client)
     on_tiktok = await upload_to_library(client, sample_video, name=REEL)
@@ -443,10 +447,17 @@ async def test_hidden_queues_and_other_accounts_do_not_count_in_the_library(
         client, _variant(sample_video, tmp_root, "suelto.mp4", b"\0"), name="suelto.mp4")
     tiktok_queue = await default_queue_id(client, tiktok)
     await enqueue(client, tiktok_queue, on_tiktok["id"])
-    await enqueue(client, await default_queue_id(client, youtube), on_youtube["id"])
+    (posted,) = (await enqueue(client, await default_queue_id(client, youtube),
+                               on_youtube["id"])).json()["added"]
 
     ids = lambda rows: sorted(r["id"] for r in rows)  # noqa: E731
     both = sorted([on_tiktok["id"], on_youtube["id"]])
+    # Waiting in YouTube: it counts for TikTok's «Cuentas» too.
+    assert ids(await _items(client, queue="any", accounts=[tiktok])) == both
+    assert ids(await _items(client, queue="none", accounts=[tiktok])) == []
+
+    await client.post(f"/api/videos/{posted['id']}/publish-now")
+    await drain(youtube)
     assert ids(await _items(client, queue="any")) == both
     assert ids(await _items(client, queue="any", accounts=[tiktok])) == [on_tiktok["id"]]
     assert ids(await _items(client, queue="none", accounts=[tiktok])) == [on_youtube["id"]]
@@ -456,15 +467,25 @@ async def test_hidden_queues_and_other_accounts_do_not_count_in_the_library(
     before = (await enabled())["queues"][0]["schedule"]["enabled"]
     resp = await client.patch(f"/api/schedules/{tiktok_queue}", json={"hidden": True})
     assert resp.status_code == 200 and resp.json()["schedule"]["hidden"] is True
-    assert ids(await _items(client, queue="any")) == [on_youtube["id"]]
-    assert ids(await _items(client, queue="none")) == [on_tiktok["id"]]
-    (row,) = await _items(client, queue="none")
-    assert row["queued"][0]["queue_hidden"] is True, "la UI la quita de «📋 En»"
+    # Hidden, but still waiting to go out: still in a queue, still not deletable.
+    assert ids(await _items(client, queue="none")) == []
+    (row,) = await _items(client, queue="any", accounts=[tiktok])
+    assert row["queued"][0]["queue_hidden"] is True and row["queued"][0]["needs_file"] is True
+    refused = await client.delete(f"/api/library/{on_tiktok['id']}")
+    assert refused.status_code == 409 and "oculta" in refused.json()["detail"]
     # Hidden is not stopped: publishing is «enabled», untouched.
     assert (await enabled())["queues"][0]["schedule"]["enabled"] == before
 
+    youtube_queue = await default_queue_id(client, youtube)
+    await client.patch(f"/api/schedules/{youtube_queue}", json={"hidden": True})
+    # Published in a hidden queue: history out of sight, so «none» and deletable.
+    assert ids(await _items(client, queue="none")) == [on_youtube["id"]]
+    (row,) = await _items(client, queue="none")
+    assert row["queued"][0]["needs_file"] is False
+    assert (await client.delete(f"/api/library/{on_youtube['id']}")).status_code == 200
+
     await client.patch(f"/api/schedules/{tiktok_queue}", json={"hidden": False})
-    assert ids(await _items(client, queue="any")) == both
+    assert ids(await _items(client, queue="any")) == [on_tiktok["id"]]
 
 
 async def test_the_library_can_be_filtered_by_text_status(client, sample_video, tmp_root):
@@ -768,7 +789,14 @@ async def test_a_video_still_in_a_queue_cannot_leave_the_library(client, sample_
     (video,) = (await enqueue(client, await default_queue_id(client, account_id),
                               item["id"])).json()["added"]
     refused = await client.delete(f"/api/library/{item['id']}")
-    assert refused.status_code == 409 and "Cola principal" in refused.json()["detail"]
+    assert refused.status_code == 409
+    detail = refused.json()["detail"]
+    # Which video, which queue, whose and why: enough to go and take it out.
+    assert item["original_name"] in detail and "«Cola principal»" in detail
+    assert "en cola" in detail or "programado" in detail
+    bulk = (await client.post("/api/library/bulk", json={
+        "action": "delete", "ids": [item["id"]], "delete_files": True})).json()
+    assert bulk["done"] == 0 and bulk["problems"] == [detail]
 
     # Removing it from the queue never touches the shared file.
     await client.delete(f"/api/videos/{video['id']}?delete_file=true")
@@ -974,3 +1002,37 @@ async def test_any_text_edited_in_the_queue_stops_following_the_library(client, 
     video = (await account_entry(client, account_id))["videos"][0]
     assert video["auto_hashtags"] == ["#mio"] and video["caption"] == "Biblioteca"
     assert video["caption_source"] == "manual"
+
+
+async def test_paths_from_the_old_tiktok_scheduler_folder_are_served(client, sample_video, tmp_root):
+    """Rows keep the absolute paths of when the app was TikTok Scheduler."""
+    from app.config import get_settings
+    from app.db import session_scope
+    from app.models import LibraryItem
+
+    settings = get_settings()
+    old_root = tmp_root / "TikTokScheduler" / "media" / "library"
+    saved = settings.legacy_library_dirs
+    settings.legacy_library_dirs = [old_root]
+    try:
+        item = await upload_to_library(client, sample_video, name=REEL)
+        current = Path(item["file_path"])
+        old = old_root / current.relative_to(library.root())
+        with session_scope() as session:
+            session.get(LibraryItem, item["id"]).file_path = str(old)
+        assert not old.exists() and library.owns(old)
+        assert library.current_path(old) == current
+
+        served = await client.get(f"/api/library/{item['id']}/file")
+        assert served.status_code == 200 and served.content == current.read_bytes()
+
+        # An old path still has to land inside the library.
+        for outside in (old_root / ".." / ".." / "secret.mp4",
+                        old_root.parent / "posted" / "x.mp4", Path("/etc/passwd")):
+            assert not library.owns(outside), outside
+            with session_scope() as session:
+                session.get(LibraryItem, item["id"]).file_path = str(outside)
+            refused = await client.get(f"/api/library/{item['id']}/file")
+            assert refused.status_code == 403, outside
+    finally:
+        settings.legacy_library_dirs = saved

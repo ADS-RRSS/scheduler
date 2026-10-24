@@ -265,10 +265,27 @@ def set_ai_rewrites(session: Session, enabled: bool) -> bool:
     return bool(enabled)
 
 
+def relocated(path: str | Path, settings: Settings | None = None) -> Path:
+    """``path``, moved from the old library folder (TikTok Scheduler) to this one.
+
+    Only a path under one of ``legacy_library_dirs`` changes, and only after
+    collapsing any ``..``: whatever comes out of an old folder lands inside the
+    library, never next to it.
+    """
+    settings = settings or get_settings()
+    path = Path(path)
+    normal = Path(os.path.normpath(path))
+    for old in settings.legacy_library_dirs:
+        old = Path(os.path.normpath(old))
+        if normal.is_relative_to(old):
+            return root(settings) / normal.relative_to(old)
+    return path
+
+
 def owns(path: str | Path, settings: Settings | None = None) -> bool:
     """Is this file one of the library's (and so shared by every queue)?"""
     try:
-        return Path(path).resolve().is_relative_to(root(settings).resolve())
+        return relocated(path, settings).resolve().is_relative_to(root(settings).resolve())
     except OSError:
         return False
 
@@ -934,9 +951,37 @@ def folders(session: Session, account_id: int | None = None) -> list[dict]:
     ]
 
 
+def needs_file(video: VideoItem) -> bool:
+    """Does this queue entry still need its library file?
+
+    The one rule for «en alguna/ninguna cola» and for refusing a delete:
+    anything not published or failed, whatever queue it is in (hidden, of
+    another account, or deleted), still has to upload or recover it.
+    """
+    return video.status not in FINISHED
+
+
 def blockers(session: Session, item: LibraryItem) -> list[VideoItem]:
     """Queue entries that still need this file."""
-    return [v for v in item.videos if v.status not in FINISHED]
+    return [v for v in item.videos if needs_file(v)]
+
+
+_STATUS_WORDS = {
+    VideoStatus.QUEUED: "en cola", VideoStatus.SCHEDULED: "programado",
+    VideoStatus.UPLOADING: "subiendo", VideoStatus.PROCESSING: "procesando",
+    VideoStatus.DELEGATED: "en Zernio",
+}
+
+
+def _blocker_line(video: VideoItem) -> str:
+    """«G-TikTok» (@cuenta, programado, oculta): where and why it still needs the file."""
+    account = video.account
+    who = (account.display_name or f"@{account.username}") if account is not None else ""
+    notes = [n for n in (who, _STATUS_WORDS.get(video.status, video.status.value),
+                         "oculta" if video.schedule is not None and video.schedule.hidden else "")
+             if n]
+    where = f"«{video.schedule.name}»" if video.schedule is not None else "sin cola (borrada)"
+    return f"{where} ({', '.join(notes)})"
 
 
 def delete(session: Session, item: LibraryItem, *, delete_file: bool = False) -> dict:
@@ -948,10 +993,10 @@ def delete(session: Session, item: LibraryItem, *, delete_file: bool = False) ->
     """
     busy = blockers(session, item)
     if busy:
-        where = sorted({v.schedule.name if v.schedule is not None else "sin cola" for v in busy})
         raise ValueError(
-            f"«{item.original_name}» sigue en {len(busy)} cola(s) ({', '.join(where)}). "
-            "Quítalo de ellas primero.")
+            f"«{item.original_name}» sigue pendiente en {len(busy)} cola(s): "
+            + "; ".join(sorted({_blocker_line(v) for v in busy}))
+            + ". Quítalo de ellas (o recupéralo de Zernio) primero.")
     name, path, folder = item.original_name, Path(item.file_path), item.folder
     for video in list(item.videos):
         video.library_item_id = None
@@ -994,8 +1039,13 @@ def _key(path: str | Path) -> str:
 
 
 def current_path(path: str | Path) -> Path:
-    """``path``, or where it went if its folder was renamed meanwhile."""
+    """``path``, or where it went if its folder was renamed meanwhile.
+
+    A path from the old TikTok Scheduler folder is read under this one.
+    """
     path = Path(path)
+    if not path.exists():
+        path = relocated(path)
     with _files_lock:
         for _ in range(len(_moved)):
             if path.exists():

@@ -227,6 +227,8 @@ def library_json(item: LibraryItem, videos: list[VideoItem] | None = None,
                 "schedule_id": v.schedule_id,
                 "queue_name": v.schedule.name if v.schedule is not None else None,
                 "queue_hidden": bool(v.schedule is not None and v.schedule.hidden),
+                # Still needs the file: shown and counted even in a hidden queue.
+                "needs_file": library.needs_file(v),
                 "platform": library.platform_of(v.account),
                 "status": v.status.value,
                 "follows_library": v.caption_source == library.FROM_LIBRARY,

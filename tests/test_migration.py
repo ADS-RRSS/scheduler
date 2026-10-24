@@ -11,6 +11,58 @@ from app.db import SCHEMA_VERSION, add_missing_columns, engine, init_db, migrate
 from app.models import Account, LibraryItem, Schedule, VideoItem, VideoStatus
 
 
+def test_v11_takes_every_path_out_of_the_old_project_folder(fresh_db, tmp_path):
+    """Through the old link or not, existing or not: only the old folder's paths change."""
+    settings = get_settings()
+    old_library = tmp_path / "TikTokScheduler" / "media" / "library"
+    library = Path(settings.media_library_dir)
+    posted = Path(settings.media_posted_dir)
+    paths = {
+        "enlazado.mp4": (old_library / "serie" / "enlazado.mp4",
+                         library / "serie" / "enlazado.mp4"),
+        "publicado.mp4": (old_library.parent / "posted" / "publicado.mp4",
+                          posted / "publicado.mp4"),
+        "ya-nuevo.mp4": (library / "serie" / "ya-nuevo.mp4", library / "serie" / "ya-nuevo.mp4"),
+        "fuera.mp4": (tmp_path / "TikTokScheduler" / "fuera.mp4",
+                      tmp_path / "TikTokScheduler" / "fuera.mp4"),
+        "otra-cosa.mp4": (old_library.parent / "otra" / "otra-cosa.mp4",
+                          old_library.parent / "otra" / "otra-cosa.mp4"),
+    }
+    with session_scope() as session:
+        account = Account(external_id="zernio:acc1", zernio_account_id="acc1",
+                          username="creator", display_name="creator")
+        session.add(account)
+        session.flush()
+        queue = Schedule(account_id=account.id, name="Cola principal")
+        session.add(queue)
+        session.flush()
+        for i, (name, (old, _)) in enumerate(paths.items()):
+            session.add(LibraryItem(folder="serie", file_path=str(old), original_name=name,
+                                    checksum=f"sum-{i}", size_bytes=3))
+            session.add(VideoItem(account_id=account.id, schedule_id=queue.id,
+                                  file_path=str(old), original_name=name,
+                                  checksum=f"sum-{i}", size_bytes=3,
+                                  status=VideoStatus.PUBLISHED))
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE settings SET value = '{\"value\": 10}' WHERE key = 'schema_version'"))
+
+    saved = settings.legacy_library_dirs
+    settings.legacy_library_dirs = [old_library]
+    try:
+        actions = migrate()
+    finally:
+        settings.legacy_library_dirs = saved
+    assert any("4 file path(s)" in a for a in actions), actions
+
+    with session_scope() as session:
+        for model in (LibraryItem, VideoItem):
+            by_name = {r.original_name: r.file_path for r in session.query(model).all()}
+            assert by_name == {name: str(new) for name, (_, new) in paths.items()}
+
+    assert migrate() == []
+
+
 def _columns(table: str) -> set[str]:
     return {c["name"] for c in inspect(engine).get_columns(table)}
 

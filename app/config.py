@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     # series, whatever number of queues publish it. It is also the watch
     # folder: a file copied in by hand is picked up on the next tick.
     media_library_dir: Path = BASE_DIR / "media" / "library"
+    # Where the library was when this app was TikTok Scheduler: the database
+    # keeps those absolute paths. Read as the same place under
+    # media_library_dir, so they work without the old folder's link.
+    legacy_library_dirs: list[Path] = [
+        Path.home() / "Projects" / "Experiments" / "TikTokScheduler" / "media" / "library",
+    ]
     # Where videos lived before the library (one copy per queue). Nothing is
     # written there any more; tools/library_copy.py and library_finalize.py
     # empty them into the library, and the admin page still reports them.

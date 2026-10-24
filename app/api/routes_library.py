@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -120,8 +120,9 @@ def library_items(
     the ones in that queue (its id), in any queue (``any``) or never queued
     (``none``), whatever their status there; hidden queues do not count, and
     ``accounts`` (several) narrows «any» and «none» to those accounts' queues,
-    the ones the library page is filtered to. ``text`` keeps the ones whose
-    texts are written (``written``), still being written (``writing``) or
+    the ones the library page is filtered to, except for an entry that still
+    needs the file: that one counts anywhere, the same rule «Borrar» follows.
+    ``text`` keeps the ones whose texts are written (``written``), still being written (``writing``) or
     whose writing failed (``failed``). ``folders`` (several) narrowed by
     ``labels``, all of them or any (``match``), keep a combination; ``label`` is
     one label; ``exclude`` leaves out the folders carrying any of its labels and
@@ -138,10 +139,13 @@ def library_items(
         if queue in ("any", "none"):
             # A row whose queue was deleted (NULL) is history, and still counts.
             hidden = select(Schedule.id).where(Schedule.hidden.is_(True))
-            entries = entries.where(or_(VideoItem.schedule_id.is_(None),
-                                        VideoItem.schedule_id.not_in(hidden)))
+            seen = or_(VideoItem.schedule_id.is_(None), VideoItem.schedule_id.not_in(hidden))
             if accounts:
-                entries = entries.where(VideoItem.account_id.in_(accounts))
+                seen = and_(seen, VideoItem.account_id.in_(accounts))
+            # Hidden queues and other accounts only hide history: an entry that
+            # still needs the file (library.needs_file) always counts, or «none»
+            # would list videos that «Borrar» then refuses.
+            entries = entries.where(or_(VideoItem.status.not_in(library.FINISHED), seen))
         if queue == "none":
             stmt = stmt.where(~entries.exists())
         elif queue == "any":
@@ -199,7 +203,7 @@ def library_item(item_id: int, session: Session = Depends(get_session)) -> dict:
 @router.get("/library/{item_id}/file")
 def library_file(item_id: int, session: Session = Depends(get_session)):
     item = _item_or_404(session, item_id)
-    path = Path(item.file_path)
+    path = library.current_path(item.file_path)
     if not library.owns(path):
         raise HTTPException(403, "El archivo está fuera de la biblioteca.")
     if not path.exists():
