@@ -403,6 +403,20 @@ data/
 └── encryption.key        ← clave que cifra las API keys (permisos 600)
 ```
 
+### Llevarlo a otra carpeta u otro Mac
+
+La base de datos guarda rutas absolutas. Tras copiar `data/`, `.secrets/` y
+`media/` a otra instalación (el instalador de Tunnel lo hace solo al migrar todo
+`_RRSS`), con la app cerrada:
+
+```bash
+./.venv/bin/python tools/relocate.py --from /Users/antes/…/Scheduler            # cuántas rutas cambiarían
+./.venv/bin/python tools/relocate.py --from /Users/antes/…/Scheduler --apply    # las escribe (y lo apunta en la Actividad)
+```
+
+Sin `.secrets/encryption.key` las claves de Zernio guardadas no se pueden leer:
+viaja siempre con la base de datos.
+
 ### Pasar a la biblioteca lo que ya tenías
 
 Los vídeos de antes de la biblioteca vivían una vez por cola en `media/inbox`,

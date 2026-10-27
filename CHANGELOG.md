@@ -4,6 +4,13 @@
 
 ### Añadido
 
+- **Copiado a otra carpeta u otro Mac, las rutas de los vídeos le siguen.**
+  `tools/relocate.py --from <carpeta del Scheduler de antes> [--apply]` pasa
+  cada ruta de `library_items` y `video_items` bajo la carpeta de antes a la
+  misma bajo ésta, historial incluido, y lo apunta en la Actividad
+  (`install_relocated`); nada más cambia. Sin `--apply` sólo cuenta. Lo usa el
+  instalador de Tunnel al migrar el espacio `_RRSS` a otro Mac.
+
 - **Subir varias carpetas a la Biblioteca y elegir a dónde van.** Al arrastrar
   más de una carpeta, o con el botón nuevo **Varias carpetas…** (el navegador
   deja elegir una cada vez: se van añadiendo a una lista, o se arrastran sobre
