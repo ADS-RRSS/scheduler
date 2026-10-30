@@ -190,9 +190,13 @@ class SchedulerWorker:
                     # the account moves, not just this one: they share the
                     # account-wide gap and daily budget.
                     # A «fuera de turno» post went out on top of the rhythm and
-                    # restarts nothing.
+                    # restarts nothing. A delegated post of the same queue may
+                    # have been found published later meanwhile: the anchor
+                    # never moves back.
                     if item.schedule is not None and not item.extra:
-                        item.schedule.last_post_at = item.published_at
+                        last = item.schedule.last_post_at
+                        if last is None or last.astimezone(timezone.utc) < item.published_at:
+                            item.schedule.last_post_at = item.published_at
                         item.schedule.next_slot_at = None
                     scheduling.replan_account(session, account)
                 if finished:

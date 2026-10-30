@@ -9,7 +9,9 @@ from app.scheduler.planner import OPENING_SPREAD_MINUTES
 from app.services import delegation
 from tests.helpers import (
     ACCOUNT_2,
+    ZERNIO_KEY,
     account_entry,
+    configure_mock,
     default_queue_id,
     drain,
     enqueue,
@@ -17,6 +19,7 @@ from tests.helpers import (
     mock_state,
     put_schedule,
     reset_mock,
+    tick,
     upload_to_library,
 )
 
@@ -139,6 +142,33 @@ async def test_an_inactive_account_is_refused(client, sample_video):
     item = await upload_to_library(client, sample_video)
     resp = await _publish_now(client, await default_queue_id(client, account_id), item["id"])
     assert resp.status_code == 409
+
+
+async def test_a_failed_extra_retried_waits_its_turn(client, sample_video):
+    """«Reintentar» puts it back as an ordinary video: left «fuera de turno» with
+    no hour, the worker would publish it on the next tick, even in a stopped queue."""
+    await reset_mock()
+    account_id = await make_account(client)
+    await put_schedule(client, account_id, enabled=False)
+    queue_id = await default_queue_id(client, account_id)
+    item = await upload_to_library(client, sample_video)
+    await _publish_now(client, queue_id, item["id"])
+    await configure_mock(key="rotated-key")  # a 401 is final: no retry
+    await drain(account_id)
+    video = _video(sample_video.name)
+    assert video.status == VideoStatus.FAILED and video.extra is True
+
+    await configure_mock(key=ZERNIO_KEY)
+    resp = await client.post(f"/api/videos/{video.id}/retry")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["extra"] is False
+    video = _video(sample_video.name)
+    assert video.status in (VideoStatus.QUEUED, VideoStatus.SCHEDULED) and video.extra is False
+
+    await tick()
+    await tick()
+    assert _video(sample_video.name).status in (VideoStatus.QUEUED, VideoStatus.SCHEDULED)
+    assert (await mock_state())["posts"] == {}, "la cola está parada: nada sale"
 
 
 # --------------------------------------------------------------------------- #

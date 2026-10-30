@@ -73,6 +73,9 @@ app/
 │   ├── zernio.py        ★ Cliente de Zernio: presign, subida, post, estado
 │   ├── accounts.py      Cuentas, claves cifradas, verificación
 │   ├── library.py       La biblioteca: un archivo por vídeo, textos por plataforma
+│   ├── library_migration.py  El paso de media/inbox… a la biblioteca (tools/library_copy.py)
+│   ├── relocation.py    La app copiada a otra carpeta u otro Mac: las rutas le siguen
+│   ├── reelinfo.py      La ficha .txt de ContentBuilder: guion, textos por plataforma
 │   ├── textcheck.py     Revisión y arreglos de un texto escrito a mano (el editor)
 │   ├── backups.py       Copias de la base de datos: a mano, antes de borrar, diarias
 │   ├── instance.py      Una sola copia de la app por base de datos (candado)
@@ -110,6 +113,7 @@ tools/
 ├── demo.sh              Arranca la app contra el Zernio falso, con sus datos en data/demo
 ├── doctor.py            make doctor: diagnóstico sólo con la biblioteca estándar
 ├── snapshot.py          make snapshot / restore: base de datos + clave + .env, a otro Mac
+├── relocate.py          --from <carpeta de antes> [--apply]: las rutas de los vídeos a esta carpeta
 └── library_copy.py · library_finalize.py   El paso de media/inbox… a la biblioteca
 Makefile · Brewfile · run.sh    Instalar y arrancar (docs/INSTALL.md)
 Dockerfile · docker-compose.yml Opcional: imagen fijada, demo aislada, VPS
@@ -397,39 +401,42 @@ sólo si está vacío. El formato del envío se adapta al servicio por la URL.
 
 ```
 tests/
-├── test_planner.py          48  Horarios: franjas, medianoche, topes, cambios de hora
+├── test_planner.py          53  Horarios: franjas, medianoche, topes, cambios de hora
+├── test_library.py          37  Biblioteca: carpetas, textos por plataforma, colas
+├── test_delegation.py       31  La cola entera a Zernio: plan, entrega, rescate
 ├── test_autocaption.py      31  Whisper (falso) → Ollama (falso) → texto y hashtags
 ├── test_queues.py           27  Varias colas por cuenta: reparto, límites, borrado
-├── test_library.py          24  Biblioteca: carpetas, textos por plataforma, colas
-├── test_delegation.py       24  La cola entera a Zernio: plan, entrega, rescate
+├── test_zernio.py           24  Conexión y publicación contra el Zernio simulado
 ├── test_textcheck.py        22  La revisión del editor, sus arreglos y sus rutas
-├── test_zernio.py           21  Conexión y publicación contra el Zernio simulado
 ├── test_captions.py         19  Variantes, campos, hashtags, recortes
 ├── test_media.py            18  Validación previa sobre vídeos reales de ffmpeg
 ├── test_admin.py            16  Cuentas, actividad, copias, mantenimiento, navegador de BD
 ├── test_queue_counting.py   15  Contador diario: zonas horarias, cambios de hora, colas
+├── test_shuffle.py          13  Mezclar, mover a mano y el orden de salida
 ├── test_reelinfo.py         13  La ficha .txt de ContentBuilder (formato 1)
-├── test_sheet_v2.py         11  La ficha con los textos de cada plataforma y el interruptor de IA
-├── test_shuffle.py          10  Mezclar y el orden de salida
-├── test_migration.py        10  Columnas nuevas y migraciones con datos
+├── test_migration.py        13  Columnas nuevas y migraciones con datos
+├── test_sheet_v2.py         12  La ficha con los textos de cada plataforma y el interruptor de IA
 ├── test_start_date.py        9  «Empezar a publicar»: hora fijada, vista previa, calendario, Zernio, hora de inicio
-├── test_guard.py             8  Otras webs, nombres, y una sola copia por base de datos
+├── test_comments.py          9  Buzón de comentarios
+├── test_extra.py             9  «Fuera de turno»: publicar ya, una hora elegida, recuperar, reintentar
 ├── test_notify_formats.py    8  Formatos por servicio y URL de Ajustes
+├── test_guard.py             8  Otras webs, nombres, y una sola copia por base de datos
 ├── test_wipe.py              7  Borrar todo, con sus tres comprobaciones
-├── test_comments.py          7  Buzón de comentarios
 ├── test_analytics.py         6  Métricas y agregados
 ├── test_aigc.py              6  La etiqueta de IA por vídeo
-├── test_backups.py           4  Copias diarias y su rotación
-├── test_calendar.py          4  La semana: marcas reales, previstos y dos colas sin pisarse
-├── test_library_texts.py     4  Revisión en la lista y hashtags en bloque
 ├── test_upload_fallback.py   4  La ruta alternativa cuando R2 no responde
 ├── test_notify.py            4  Los avisos nunca rompen una publicación
+├── test_library_texts.py     4  Revisión en la lista y hashtags en bloque
+├── test_calendar.py          4  La semana: marcas reales, previstos y dos colas sin pisarse
+├── test_backups.py           4  Copias diarias y su rotación
 ├── test_snapshot.py          3  Instantánea a otro Mac y vuelta
+├── test_db_locks.py          3  Escrituras largas que no bloquean al resto de la app
 ├── test_caption_priority.py  3  Lo pedido a mano pasa delante; la estimación
 ├── test_state.py             2  /api/state con cientos de vídeos: nada pendiente se pierde
+├── test_relocation.py        1  Las rutas siguen a la app copiada a otra carpeta
 └── test_doctor.py            1  make doctor corre sin nada preparado
                             ───
-                            369
+                            439
 ```
 
 `make check` (ruff + pytest) pasa los tests en local, y `make docker-test` lo

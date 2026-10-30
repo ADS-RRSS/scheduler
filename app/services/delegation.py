@@ -278,7 +278,7 @@ async def cancel(
     settings: Settings,
     *,
     back_to_queue: bool = True,
-) -> None:
+) -> bool:
     """Undo one delegation.
 
     Deletes the post in Zernio when it already got there, so it cannot publish

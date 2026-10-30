@@ -95,7 +95,16 @@
   siempre primero y sólo falla lo que Zernio aún tiene pendiente. La migración
   v9 devuelve a «en Zernio» los vídeos que fallaron por esto para que se
   consulten una vez. El ancla del ritmo de la cola ya no retrocede cuando una
-  puesta al día encuentra un post antiguo después de uno más reciente.
+  puesta al día encuentra un post antiguo después de uno más reciente, ni
+  cuando un vídeo subido desde aquí se confirma después de que uno delegado
+  de la misma cola se publicara más tarde.
+- **«Reintentar» un vídeo «fuera de turno» fallido lo publicaba en el siguiente
+  ciclo**, con la cola parada o fuera de sus horas: volvía a la cola con la marca
+  de fuera de turno y sin hora, que es lo que el worker suelta al momento. Ahora
+  vuelve como un vídeo normal, igual que al recuperarlo de Zernio.
+- La vista previa de «Enviar a Zernio» rechaza un `limit` de 0 o negativo
+  (`GET …/delegation?limit=`), como ya hacía el envío: antes enseñaba un plan que
+  el envío no habría hecho.
 
 ### Cambiado
 

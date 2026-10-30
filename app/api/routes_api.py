@@ -924,7 +924,7 @@ def _delegation_payload(session: Session, schedule: Schedule, planned: list,
 
 @router.get("/schedules/{schedule_id}/delegation")
 def delegation_preview(
-    schedule_id: int, limit: int | None = None, folder: str | None = None,
+    schedule_id: int, limit: int | None = Query(None, ge=1), folder: str | None = None,
     label: str | None = None, folders: list[str] | None = Query(None),
     labels: list[str] | None = Query(None), match: str = Query("all", pattern="^(all|any)$"),
     session: Session = Depends(get_session),
@@ -1267,7 +1267,12 @@ async def retry_video(video_id: int, session: Session = Depends(get_session)) ->
     item.last_error = None
     item.zernio_post_id = None
     item.scheduled_at = None
+    item.next_status_check_at = None
     item.preflight_errors = None
+    # Back as an ordinary video, as when it is recovered from Zernio: «fuera
+    # de turno» with no hour would go out on the next tick, whatever the
+    # queue's hours or its switch.
+    item.extra = False
     schedule = _queue_of(item)
     item.schedule_id = schedule.id
     scheduling.plan_next_slot(session, schedule)
