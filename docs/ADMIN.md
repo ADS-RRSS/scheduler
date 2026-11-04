@@ -278,6 +278,20 @@ aplicarían encima). Las claves de la copia sólo se pueden leer con el mismo
   planificador ya lo limita a 2000 por sí solo).
 - *Vídeos fallidos → Limpiar*: quita de todas las colas los vídeos en estado
   fallido, y opcionalmente borra sus archivos de `media/failed/`.
+- *Sin archivo en disco → Limpiar*: para cuando la base de datos llegó de otro
+  Mac sin sus vídeos (el paquete de migración de Tunnel sin «medios»). Quita de
+  las colas los vídeos que esperan un archivo que no está (en cola, programados
+  o marcados para Zernio sin que Zernio los tenga aún) y las entradas de la
+  biblioteca sin archivo (con su `.txt` o portada, si llegaron solos). Se
+  quedan los vídeos en manos de Zernio (subiendo, procesando o aparcados en
+  Zernio con su `zernio_post_id`: Zernio tiene los bytes y los publica solo),
+  los publicados y los fallidos (historial: sólo dejan de apuntar a la
+  biblioteca), y todo lo que sí tiene archivo, que es lo hecho en este Mac
+  después de migrar. Antes enseña cuántos se van por cola y carpeta y cuántos
+  se quedan, hace una copia de la base de datos (como «Borrar todo») y deja
+  una línea en la Actividad (`missing_cleaned`). Las colas afectadas se
+  replanifican. `GET /api/admin/videos/missing` es la vista previa;
+  `POST /api/admin/videos/missing/clean`, la limpieza.
 
 **Sistema.** Versión de la app y del esquema, Python y SQLite, estado del
 planificador (ciclos, tiempo activo, último ciclo), ffmpeg, tamaño de la base de

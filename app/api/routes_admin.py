@@ -25,6 +25,7 @@ from ..schemas import ClearFailedIn, PruneEventsIn, WipeAnswerIn, WipeIn
 from ..services import backups as backups_svc
 from ..services import events, media
 from ..services import library as library_svc
+from ..services import missing as missing_svc
 from ..services import queue as queue_svc
 from .serializers import iso
 from .routes_api import ai_status, disk_status
@@ -193,6 +194,34 @@ def clear_failed(body: ClearFailedIn, session: Session = Depends(get_session)) -
                   level="warn", account_id=body.account_id)
     session.commit()
     return {"removed": len(items)}
+
+
+@router.get("/videos/missing")
+def missing_preview(session: Session = Depends(get_session)) -> dict:
+    """What «Sin archivo en disco → Limpiar» would remove: queued videos and library entries whose file
+    is not here (the database came from another Mac without its media), and what stays."""
+    report = missing_svc.find(session)
+    return {
+        **report.json(),
+        "stuck_uploads": len(missing_svc.stuck_uploads(report, get_settings().status_timeout_minutes)),
+        "relocated": missing_svc.relocated(session),
+    }
+
+
+@router.post("/videos/missing/clean")
+def missing_clean(session: Session = Depends(get_session)) -> dict:
+    """Remove them. A backup of the database goes first, as with «Borrar todo»."""
+    report = missing_svc.find(session)
+    if not (report.local or report.library):
+        return {**report.json(), "backup": None, "message": "No hay nada sin archivo que quitar."}
+    name, _ = _backup_now()
+    result = missing_svc.clean(session, report)
+    session.commit()
+    return {
+        **result, "backup": name,
+        "message": f"{result['videos']['local']} vídeo(s) quitados de las colas y {result['library']} de la "
+                   f"biblioteca. Copia previa: {name}.",
+    }
 
 
 # --------------------------------------------------------------------------- #

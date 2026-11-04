@@ -155,7 +155,8 @@ externa es la de Zernio, gratis hasta dos cuentas de TikTok.
 - **Copias de seguridad** de la base de datos: una **automática al día** (se
   guardan las 14 últimas), las que hagas con un clic, y **`make snapshot`** para
   llevártelo todo a otro Mac (base de datos, clave de cifrado y `.env`).
-  Mantenimiento: recortar el registro, limpiar fallidos.
+  Mantenimiento: recortar el registro, limpiar fallidos, quitar lo que no tiene archivo en disco
+  (tras migrar sin los vídeos).
 - **Una sola copia de la app por base de datos**: una segunda (en otra terminal
   o en Docker) se niega a arrancar, en vez de publicar cada vídeo dos veces.
 - **Borrar todo**: vacía la base de datos y borra los vídeos de `media/`, tras

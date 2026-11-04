@@ -4,6 +4,17 @@
 
 ### Añadido
 
+- **Ajustes → Mantenimiento → Sin archivo en disco.** Tras traer la base de
+  datos de otro Mac sin sus vídeos (el paquete de Tunnel sin «medios»), quita
+  de las colas lo que espera un archivo que no está (en cola, programado o
+  marcado para Zernio sin que Zernio lo tenga aún) y las entradas de la
+  biblioteca sin archivo; lo que ya tiene Zernio, lo publicado y lo fallido se
+  quedan (sólo dejan de apuntar a la biblioteca). Lo hecho en este Mac tiene
+  su archivo y no se toca: la regla es «el archivo no está donde dice la
+  fila», no una fecha. Enseña antes qué se va y qué se queda, hace una copia
+  de la base de datos y lo apunta en la Actividad (`missing_cleaned`).
+  `GET /api/admin/videos/missing` (vista previa) y
+  `POST /api/admin/videos/missing/clean`.
 - **Copiado a otra carpeta u otro Mac, las rutas de los vídeos le siguen.**
   `tools/relocate.py --from <carpeta del Scheduler de antes> [--apply]` pasa
   cada ruta de `library_items` y `video_items` bajo la carpeta de antes a la

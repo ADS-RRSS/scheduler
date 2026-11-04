@@ -427,7 +427,7 @@ let systemCache = null;
 export function renderSettingsPage() {
     if (document.activeElement !== $("#set-hashtags")) $("#set-hashtags").value = state.data.settings.hashtags || "";
     if (document.activeElement !== $("#set-webhook")) $("#set-webhook").value = state.data.settings.webhook_url || "";
-    if (!systemCache) loadSystem();
+    if (!systemCache) { loadSystem(); loadMissing(); }
 }
 
 async function loadSystem() {
@@ -559,7 +559,52 @@ export function wireAdmin() {
             toast(err.message, true);
         }
     });
+    $("#maint-missing").addEventListener("click", cleanMissing);
     wireDb();
+}
+
+// Sin archivo en disco: primero la vista previa (qué se va y qué se queda), luego la confirmación.
+export async function loadMissing() {
+    const sum = $("#maint-missing-sum");
+    if (!sum) return null;
+    try {
+        const m = await api("/api/admin/videos/missing");
+        sum.textContent = m.total
+            ? `Ahora mismo: ${m.videos.local} vídeo(s) en cola y ${m.library} de la biblioteca sin archivo`
+              + (m.videos.zernio ? ` (${m.videos.zernio} en manos de Zernio se quedan)` : "") + "."
+            : "Ahora mismo no falta ningún archivo.";
+        return m;
+    } catch (err) {
+        sum.textContent = "";
+        return null;
+    }
+}
+
+async function cleanMissing() {
+    const m = await loadMissing();
+    if (!m) return;
+    if (!m.total) { toast("No hay nada sin archivo que quitar."); return; }
+    const queues = m.queues.slice(0, 6).map((q) => `${q.account} · ${q.name}: ${q.count}`).join("; ")
+        + (m.queues.length > 6 ? `; y ${m.queues.length - 6} colas más` : "");
+    const lines = [
+        `Se quitan ${m.videos.local} vídeo(s) que esperan un archivo que no está (${queues}) y ${m.library} entrada(s) `
+        + `de la biblioteca sin archivo (${Object.keys(m.folders).length} carpeta(s)).`,
+        `Se quedan: ${m.videos.zernio} en manos de Zernio, ${m.videos.history} publicados o fallidos, y los `
+        + `${m.intact.videos} vídeo(s) y ${m.intact.library} entrada(s) que sí tienen archivo.`,
+        m.relocated ? `La base de datos llegó de «${m.relocated.from || "otra carpeta"}» el `
+            + `${(m.relocated.ts || "").slice(0, 16).replace("T", " ")}.` : "",
+        "Antes se hace una copia de la base de datos.",
+    ].filter(Boolean);
+    if (!await confirmar("Quitar lo que no tiene archivo en disco", {text: lines.join(" "), ok: "Quitar", danger: true})) return;
+    try {
+        const res = await api("/api/admin/videos/missing/clean", {method: "POST"});
+        toast(res.message);
+        await state.refresh();
+        await loadSystem();
+        await loadMissing();
+    } catch (err) {
+        toast(err.message, true);
+    }
 }
 
 async function saveSettings(announce = true) {
