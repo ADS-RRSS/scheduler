@@ -8,7 +8,10 @@ import {
     api,
     button,
     closeModal,
+    confirmar,
     el,
+    icon,
+    pop,
     everyQueue,
     fillSelect,
     fmtBytes,
@@ -298,16 +301,16 @@ export function forgetLibraryDrawing() {
 /* ------------------------------------------------------------------ */
 
 function textBadge(item) {
-    if (item.preflight_errors.length) return el("span", "badge FAILED", "no válido");
+    if (item.preflight_errors.length) return el("span", "status FAILED", "no válido");
     switch (item.caption_status) {
         case "pending":
-            return el("span", "badge SCHEDULED", "✍️ en cola");
+            return el("span", "status SCHEDULED", "texto en cola");
         case "generating":
-            return el("span", "badge UPLOADING", "✍️ escribiendo");
+            return el("span", "status UPLOADING", "escribiendo");
         case "failed":
-            return el("span", "badge FAILED", "texto falló");
+            return el("span", "status FAILED", "texto falló");
         default:
-            return el("span", "badge PUBLISHED", item.caption_source === "manual" ? "texto propio" : "listo");
+            return el("span", "status PUBLISHED", item.caption_source === "manual" ? "texto propio" : "listo");
     }
 }
 
@@ -315,8 +318,8 @@ function textBadge(item) {
 function reviewBadge(item) {
     const r = item.review;
     if (!r || !(r.errors + r.warnings)) return null;
-    const badge = el("button", `badge review-badge ${r.errors ? "FAILED" : "UPLOADING"}`,
-        `${r.errors ? "⛔" : "⚠"} ${r.errors + r.warnings}`);
+    const badge = el("button", `badge review-badge ${r.errors ? "FAILED" : "UPLOADING"}`);
+    badge.append(icon(r.errors ? "ban" : "alert"), String(r.errors + r.warnings));
     badge.type = "button";
     badge.title = r.issues.map((i) => `${i.platform === "youtube" ? "YouTube" : "TikTok"}: ${i.message}`)
         .join("\n") + "\n\nClic para abrir sus textos.";
@@ -347,11 +350,11 @@ function usageLine(item) {
     const shown = item.queued.filter(shownUse);
     if (!shown.length) {
         box.append(el("span", "lib-chip none", item.queued.length && lib.accounts.length
-            ? "📋 No está en ninguna cola de estas cuentas"
-            : "📋 No está en ninguna cola"));
+            ? "No está en ninguna cola de estas cuentas"
+            : "No está en ninguna cola"));
         return box;
     }
-    box.append(el("span", "lib-usage-label", "📋 En"));
+    box.append(el("span", "lib-usage-label", "En"));
     shown.forEach((entry) => {
         const chip = el("button", `lib-chip ${entry.status}`,
             `${where(entry)} · ${statusLabel(entry.status)}`);
@@ -407,12 +410,12 @@ function itemRow(item) {
     main.append(titleRow);
     main.append(usageLine(item));
     const bits = [];
-    if (lib.folder === ALL) bits.push(`📁 ${item.folder}`);
+    if (lib.folder === ALL) bits.push(item.folder);
     if (item.duration_sec) bits.push(`${item.duration_sec}s`);
     if (item.resolution) bits.push(item.resolution);
     if (item.size_mb) bits.push(`${item.size_mb} MB`);
     if (item.has_audio === false) bits.push("sin audio");
-    if (item.has_cover) bits.push("🖼 con portada");
+    if (item.has_cover) bits.push("con portada");
     if (item.caption_source && SOURCE_LABEL[item.caption_source]) bits.push(SOURCE_LABEL[item.caption_source]);
     const meta = el("div", "item-meta", bits.join(" · "));
     if (lib.folder === ALL) labelsOf(item.folder).forEach((l) => meta.append(" ", labelChip(l)));
@@ -424,29 +427,32 @@ function itemRow(item) {
         main.append(line);
     }
     if (item.caption_error) main.append(el("div", `item-ai ${item.caption_status === "failed" ? "failed" : ""}`,
-        `${item.caption_status === "failed" ? "⚠️ " : ""}${item.caption_error}`));
+        item.caption_error));
     item.preflight_errors.forEach((e) => main.append(el("div", "item-error", e)));
     row.append(main);
 
+    /* Ver, Textos y Añadir a la vista; lo demás bajo «Más». */
     const actions = el("div", "item-actions");
+    const more = [];
     actions.append(
         link("Ver", `/api/library/${item.id}/file`, "btn btn-ghost btn-sm"),
-        ...(item.has_cover ? [link("Portada", `/api/library/${item.id}/cover`, "btn btn-ghost btn-sm")] : []),
-        button("Textos", "btn btn-ghost btn-sm", () => openTextsEditor(item)),
+        button("Textos", "btn btn-ghost btn-sm", () => openTextsEditor(item), "pen"),
     );
+    if (!item.preflight_errors.length) {
+        actions.append(button("Añadir…", "btn btn-ghost btn-sm", () => openAddToQueue([item]), "plus"));
+    }
+    if (item.has_cover) more.push(link("Portada", `/api/library/${item.id}/cover`, "btn btn-ghost btn-sm"));
     const ai = state.data?.health?.ai;
     if (ai && ai.enabled && !WRITING.includes(item.caption_status) && !item.preflight_errors.length) {
-        actions.append(button("Reescribir", "btn btn-ghost btn-sm", async () => {
+        more.push(button("Reescribir", "btn btn-ghost btn-sm", async () => {
             await api(`/api/library/${item.id}/rewrite`, {method: "POST"});
             toast("Escribiendo sus textos… aparecerán aquí");
             await reload();
             await state.refresh();
-        }));
+        }, "refresh"));
     }
-    if (!item.preflight_errors.length) {
-        actions.append(button("Añadir…", "btn btn-ghost btn-sm", () => openAddToQueue([item])));
-    }
-    actions.append(button("Mover…", "btn btn-ghost btn-sm", () => openMoveItems([item])));
+    more.push(button("Mover…", "btn btn-ghost btn-sm", () => openMoveItems([item]), "folder"));
+    actions.append(pop("", more));
     row.append(actions);
     return row;
 }
@@ -538,11 +544,11 @@ function drawFolders() {
             row.append(name);
             const marks = el("span", "lib-folder-count");
             marks.append(document.createTextNode(String(f.count)));
-            if (f.writing) marks.append(el("span", "lib-folder-mark", ` · ✍️ ${f.writing}`));
-            if (f.failed || f.invalid) marks.append(el("span", "lib-folder-mark bad", ` · ⚠ ${f.failed + f.invalid}`));
+            if (f.writing) marks.append(el("span", "lib-folder-mark", ` · ${f.writing} escribiendo`));
+            if (f.failed || f.invalid) marks.append(el("span", "lib-folder-mark bad", ` · ${f.failed + f.invalid} con avisos`));
             row.append(marks);
             row.title = `${f.count} vídeo(s) · ${fmtBytes(f.bytes)} · ${f.in_queues} en alguna cola`
-                + (f.labels.length ? `\n🏷️ ${f.labels.join(", ")}` : "");
+                + (f.labels.length ? `\nEtiquetas: ${f.labels.join(", ")}` : "");
             row.addEventListener("click", () => {
                 lib.folder = f.folder;
                 lib.folders = [];
@@ -555,7 +561,7 @@ function drawFolders() {
     const o = lib.overview;
     const eta = state.data?.captions?.eta_seconds;
     $("#lib-totals").textContent = o
-        ? `${o.total} vídeo(s) · ${fmtBytes(o.bytes)}` + (o.writing ? ` · ✍️ ${o.writing} escribiéndose` : "")
+        ? `${o.total} vídeo(s) · ${fmtBytes(o.bytes)}` + (o.writing ? ` · ${o.writing} escribiéndose` : "")
         + (o.writing && eta ? ` · acaban en ~${fmtDuration(eta)}` : "")
         : "";
     $("#lib-totals").title = o && o.writing
@@ -577,12 +583,12 @@ function drawToolbar() {
     $("#lib-tags").disabled = count === 0 && !(lib.folder && lib.folder !== ALL);
     $("#lib-issues").checked = lib.issues;
     $("#lib-text-filter").value = lib.text;
-    $("#lib-add").textContent = count ? `Añadir ${count} a una cola…` : "Añadir a una cola…";
+    $("#lib-add").replaceChildren(icon("plus"), count ? `Añadir ${count} a una cola…` : "Añadir a una cola…");
     const writing = shown.filter((i) => WRITING.includes(i.caption_status)).length;
     $("#lib-summary").textContent = lib.items
         ? `${shown.length}${lib.items.total > shown.length ? ` de ${lib.items.total}` : ""} vídeo(s)`
         + (count ? ` · ${count} seleccionado(s)` : "")
-        + (writing ? ` · ✍️ ${writing} escribiéndose` : "")
+        + (writing ? ` · ${writing} escribiéndose` : "")
         : "";
 }
 
@@ -650,7 +656,7 @@ function drawQueueFilter() {
         ["any", `En alguna cola${scoped}`],
         ["none", `En ninguna cola${scoped}`],
         ...all.map((q) => [String(q.schedule.id),
-            `📋 ${several ? `${accountLabel(q.account)} · ` : ""}${q.schedule.name}`]),
+            `${several ? `${accountLabel(q.account)} · ` : ""}${q.schedule.name}`]),
     ], lib.queue);
 }
 
@@ -678,10 +684,10 @@ function draw() {
     } else if (!items.length) {
         list.replaceChildren(el("div", "empty", lib.q
             ? `Ningún vídeo de aquí coincide con «${lib.q}».`
-            : lib.issues ? "Ningún texto de aquí tiene nada que corregir. ✓"
+            : lib.issues ? "Ningún texto de aquí tiene nada que corregir."
                 : lib.folder === ALL && !isEmptyScope(libScope()) && !scopedFolders().length
                     ? "Ninguna carpeta coincide con las carpetas y etiquetas elegidas."
-                    : lib.text === "writing" ? "Aquí no se está escribiendo ningún texto. ✓"
+                    : lib.text === "writing" ? "Aquí no se está escribiendo ningún texto."
                         : lib.text ? "Ningún vídeo de aquí coincide con el filtro de textos."
                             : lib.queue ? "Ningún vídeo de aquí coincide con el filtro de cola."
                                 : "La biblioteca está vacía. Arrastra aquí arriba la carpeta con tus vídeos y sus .txt."));
@@ -1024,7 +1030,7 @@ function folderPicker({folders, create = false, footer = null, onChange, onConfi
             name.prepend(dots);
         }
         row.append(name, el("span", "lib-folder-count", String(f.count)));
-        row.title = f.labels.length ? `🏷️ ${f.labels.join(", ")}` : "";
+        row.title = f.labels.length ? `Etiquetas: ${f.labels.join(", ")}` : "";
         row.addEventListener("click", () => choose(f.folder));
         // Two clicks on it: that one, now.
         row.addEventListener("dblclick", () => {
@@ -1496,8 +1502,8 @@ function openAddToQueue(items) {
     whenField.append(document.createTextNode("Cuándo"));
     [
         ["queue", "En su turno, con el ritmo de cada cola"],
-        ["now", "⚡ Publicar ya, fuera de turno"],
-        ["at", "📅 Programar día y hora en Zernio, fuera de turno"],
+        ["now", "Publicar ya, fuera de turno"],
+        ["at", "Programar día y hora en Zernio, fuera de turno"],
     ].forEach(([value, label]) => {
         const radio = el("input");
         radio.type = "radio";
@@ -1522,8 +1528,8 @@ function openAddToQueue(items) {
 
     /** The chosen instant as a Date (read in this computer's zone), or null. */
     const instant = () => at.day ? new Date(`${at.day}T${at.time || "00:00"}:00`) : null;
-    const whenText = () => mode === "now" ? "⚡ ya mismo, fuera de turno"
-        : mode === "at" ? `📅 el ${longLabel(at.day, at.time)}, programado en Zernio, fuera de turno`
+    const whenText = () => mode === "now" ? "ya mismo, fuera de turno"
+        : mode === "at" ? `el ${longLabel(at.day, at.time)}, programado en Zernio, fuera de turno`
             : "en su turno, con el ritmo de cada cola";
 
     const go = button("", "btn btn-primary", () => confirm());
@@ -1592,7 +1598,7 @@ function openAddToQueue(items) {
             sheet.append(videos);
         }
 
-        const yes = button(mode === "now" ? "⚡ Sí, publicar ya" : mode === "at" ? "📅 Sí, programar" : "Sí, añadir",
+        const yes = button(mode === "now" ? "Sí, publicar ya" : mode === "at" ? "Sí, programar" : "Sí, añadir",
             "btn btn-primary", async () => {
                 yes.disabled = true;
                 back.disabled = true;
@@ -1621,8 +1627,8 @@ function openAddToQueue(items) {
                 + "Como «Publicar ya», no mueve el ritmo de la cola ni ocupa su cupo, y se puede "
                 + "recuperar de Zernio antes de su hora.",
         }[mode];
-        go.textContent = n ? `Revisar: ${mode === "now" ? "⚡ publicar ya en" : mode === "at"
-            ? "📅 programar en" : "añadir a"} ${count}…` : "Marca al menos una cola";
+        go.textContent = n ? `Revisar: ${mode === "now" ? "publicar ya en" : mode === "at"
+            ? "programar en" : "añadir a"} ${count}…` : "Marca al menos una cola";
         go.disabled = !n || (mode === "at" && (!at.day || gone));
     }
 
@@ -1736,10 +1742,10 @@ export async function openLibraryPicker(entry, queue) {
             const why = item.in_account
                 ? `ya en ${item.queued.filter((q) => q.account_id === entry.account.id).map((q) => `«${q.queue_name}»`).join(", ")}`
                 : item.preflight_errors.length ? "no pasa la validación"
-                    : WRITING.includes(item.caption_status) ? "✍️ textos escribiéndose (llegarán solos)"
+                    : WRITING.includes(item.caption_status) ? "textos escribiéndose (llegarán solos)"
                         : (platform === "youtube" ? t.title : (t.description || "").split("\n")[0]) || "sin texto";
             main.append(el("span", "muted small",
-                (search.value.trim() || several() ? `📁 ${item.folder} · ` : "") + why));
+                (search.value.trim() || several() ? `${item.folder} · ` : "") + why));
             row.append(box, main);
             if (blocked) row.classList.add("is-done");
             return row;
@@ -1947,7 +1953,7 @@ function openBatchUpload(files = [], {pick = false} = {}) {
         const covers = sent.filter(({file}) => COVER_RE.test(file.name)).length;
         const row = el("div", "lib-batch-row");
         const main = el("div", "lib-batch-main");
-        main.append(el("span", "lib-batch-name", name ? `📁 ${name}` : "Archivos sueltos"),
+        main.append(el("span", "lib-batch-name", name || "Archivos sueltos"),
             el("span", "muted small", [
                 `${videos.length} vídeo(s)`, texts && `${texts} .txt`, covers && `${covers} portada(s)`,
                 fmtBytes(sent.reduce((n, {file}) => n + file.size, 0)),
@@ -2273,8 +2279,8 @@ export function wireLibrary() {
     $("#lib-rewrite").addEventListener("click", async () => {
         const items = selectedItems();
         if (!items.length) return;
-        if (!confirm(`¿Volver a escribir los textos de TikTok y YouTube de ${items.length} vídeo(s)? `
-            + "Los que estén en cola siguiendo la biblioteca recibirán los nuevos.")) return;
+        if (!await confirmar(`Volver a escribir los textos de ${items.length} vídeo(s)`,
+            {text: "Los de TikTok y YouTube. Los que estén en cola siguiendo la biblioteca recibirán los nuevos.", ok: "Reescribir"})) return;
         try {
             const res = await api("/api/library/bulk", {
                 method: "POST", body: JSON.stringify({action: "rewrite", ids: items.map((i) => i.id)}),
@@ -2289,8 +2295,8 @@ export function wireLibrary() {
     $("#lib-sheet").addEventListener("click", async () => {
         const items = selectedItems();
         if (!items.length) return;
-        if (!confirm(`¿Poner a ${items.length} vídeo(s) los textos de TikTok y YouTube de su ficha .txt, tal cual? `
-            + "Sustituyen a los que tengan, también a los editados a mano.")) return;
+        if (!await confirmar(`Poner a ${items.length} vídeo(s) los textos de su ficha`,
+            {text: "Los de TikTok y YouTube de su ficha .txt, tal cual. Sustituyen a los que tengan, también a los editados a mano.", ok: "Poner los de la ficha"})) return;
         try {
             const res = await api("/api/library/bulk", {
                 method: "POST", body: JSON.stringify({action: "sheet", ids: items.map((i) => i.id)}),
@@ -2325,8 +2331,11 @@ export function wireLibrary() {
         const items = selectedItems();
         if (!items.length) return;
         const busy = items.filter((i) => i.queued.some((q) => !["PUBLISHED", "FAILED"].includes(q.status)));
-        if (!confirm(`¿Borrar ${items.length} vídeo(s) de la biblioteca y del disco? No se puede deshacer.`
-            + (busy.length ? `\n\n${busy.length} siguen en alguna cola y se quedarán: quítalos antes de ahí.` : ""))) return;
+        if (!await confirmar(`Borrar ${items.length} vídeo(s) de la biblioteca y del disco`, {
+            text: "No se puede deshacer."
+                + (busy.length ? `\n\n${busy.length} siguen en alguna cola y se quedarán: quítalos antes de ahí.` : ""),
+            ok: "Borrar", danger: true,
+        })) return;
         try {
             const res = await api("/api/library/bulk", {
                 method: "POST",

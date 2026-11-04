@@ -12,6 +12,11 @@ import {
     api,
     button,
     closeModal,
+    confirmar,
+    icon,
+    pedir,
+    pop,
+    setLabel,
     currentAccount,
     currentQueue,
     drawPlatformChips,
@@ -177,11 +182,12 @@ function renderShell() {
     $("#brand").classList.toggle("is-active", page === "resumen");
     $("#mainnav").classList.toggle("is-disabled", !hasAccounts);
     $("#pause-btn").hidden = !hasAccounts;
-    $("#pause-btn").textContent = health.paused ? "▶ Reanudar" : "⏸ Pausar";
+    setLabel($("#pause-btn"), health.paused ? "play" : "pause", health.paused ? "Reanudar" : "Pausar");
 
     const dot = $("#health-dot");
     dot.className = "dot " + (health.paused ? "paused" : health.scheduler_running ? "ok" : "err");
-    dot.title = health.paused
+    $("#health-text").textContent = health.paused ? "Pausado" : health.scheduler_running ? "Activo" : "Parado";
+    $("#health").title = health.paused
         ? "Programación pausada"
         : health.scheduler_running
             ? `Planificador activo · último ciclo ${fmtDate(health.scheduler_last_tick)}`
@@ -216,7 +222,7 @@ function renderShell() {
     $("#pill-queue").hidden = pending === 0;
 
     const shelving = state.data.library?.writing || 0;
-    $("#pill-library").textContent = `✍️ ${shelving}`;
+    $("#pill-library").textContent = String(shelving);
     $("#pill-library").hidden = shelving === 0;
     $("#pill-library").title = `${shelving} vídeo(s) de la biblioteca escribiendo sus textos`;
 
@@ -250,12 +256,19 @@ function renderQueueBar(page) {
             const tab = el("button", `queue-tab${isActive ? " is-active" : ""}${schedule.hidden ? " is-hidden" : ""}`
                 + (entry === firstHidden ? " is-first-hidden" : ""));
             tab.type = "button";
+            const dot = el("span", `queue-dot ${schedule.enabled ? "on" : "off"}`);
+            dot.title = schedule.enabled ? "Programación activa" : "Programación parada";
+            const flag = (name, title) => {
+                const f = el("span", "queue-tab-start");
+                f.append(icon(name));
+                f.title = title;
+                return f;
+            };
             tab.append(
-                el("span", `queue-dot ${schedule.enabled ? "on" : "off"}`,
-                    schedule.enabled ? "●" : "○"),
+                dot,
                 el("span", "queue-tab-name", schedule.name),
-                ...(schedule.start_date ? [el("span", "queue-tab-start", "⏳")] : []),
-                ...(schedule.hidden ? [el("span", "queue-tab-start", "🙈")] : []),
+                ...(schedule.start_date ? [flag("hourglass", "Empieza más adelante")] : []),
+                ...(schedule.hidden ? [flag("eye-off", "Oculta")] : []),
                 el("span", "queue-tab-count", stats.queued),
             );
             tab.title = (schedule.hidden ? "Oculta: no sale en la Biblioteca ni se abre por defecto · " : "")
@@ -283,7 +296,9 @@ function renderOnboarding() {
     $("#onboarding-requirements").replaceChildren(
         ...reqs.map(([ok, label]) => {
             const row = el("div", `req ${ok ? "ok" : "bad"}`);
-            row.append(el("span", "mark", ok ? "✓" : "✕"), el("span", null, label));
+            const mark = el("span", "mark");
+            mark.append(icon(ok ? "check" : "x"));
+            row.append(mark, el("span", null, label));
             return row;
         })
     );
@@ -334,7 +349,7 @@ async function toggleHidden(schedule) {
 
 function hideButton(schedule) {
     const b = button(schedule.hidden ? "Mostrar" : "Ocultar", "btn btn-ghost btn-sm",
-        () => toggleHidden(schedule));
+        () => toggleHidden(schedule), schedule.hidden ? "eye" : "eye-off");
     b.title = schedule.hidden
         ? "Volver a ofrecerla en la Biblioteca y con las demás pestañas de cola"
         : "Que no salga en la Biblioteca y quede al final de las pestañas, sin abrirse por defecto. Si está activa, sigue publicando.";
@@ -390,33 +405,35 @@ function renderOverview() {
                 const {schedule: s, stats: qs} = q;
                 const row = el("div", `queue-row${s.hidden ? " is-hidden" : ""}`);
                 const head = el("div", "queue-row-head");
-                head.append(el("span", `queue-dot ${s.enabled ? "on" : "off"}`, s.enabled ? "●" : "○"),
-                    el("strong", null, s.name), ...(s.hidden ? [el("span", "muted small", "🙈 oculta")] : []));
+                const dot = el("span", `queue-dot ${s.enabled ? "on" : "off"}`);
+                dot.title = s.enabled ? "Programación activa" : "Programación parada";
+                head.append(dot, el("strong", null, s.name), ...(s.hidden ? [el("span", "muted small", "oculta")] : []));
                 row.append(head);
                 row.append(el("span", "muted small",
                     `${qs.queued} en cola · ${windowsSummary(s)} · `
                     + (s.start_date ? `empieza ${startLabel(s)} · ` : "")
                     + (s.enabled ? (s.next_slot_local ? `próxima ${s.next_slot_local}` : "sin hueco válido")
                         : "parada")));
-                const go = el("div", "actions-bar");
+                /* Ir a la cola o a sus reglas (ghost); parar o activar, con su icono (con borde: cambia algo). */
+                const go = el("div", "actions-bar queue-row-actions");
                 go.append(
                     button("Cola", "btn btn-ghost btn-sm", () => {
                         setAccount(account.id);
                         setQueue(s.id);
                         location.hash = "#/cola";
-                    }),
+                    }, "list"),
                     button("Programación", "btn btn-ghost btn-sm", () => {
                         setAccount(account.id);
                         setQueue(s.id);
                         location.hash = "#/programacion";
-                    }),
-                    button(s.enabled ? "Parar" : "Activar", "btn btn-ghost btn-sm", async () => {
+                    }, "clock"),
+                    button(s.enabled ? "Parar" : "Activar", "btn btn-sm", async () => {
                         await api(`/api/schedules/${s.id}`, {
                             method: "PATCH", body: JSON.stringify({enabled: !s.enabled}),
                         });
                         toast(s.enabled ? `«${s.name}» parada` : `«${s.name}» activa`);
                         await state.refresh();
-                    }),
+                    }, s.enabled ? "pause" : "play"),
                     hideButton(s),
                 );
                 row.append(go);
@@ -425,12 +442,16 @@ function renderOverview() {
             card.append(list);
 
             const failed = videos.find((v) => v.status === "FAILED" && v.last_error);
-            if (failed) card.append(el("div", "item-error", `Último fallo: ${failed.last_error}`));
+            if (failed) {
+                const err = el("div", "item-error one-line", `Último fallo: ${failed.last_error}`);
+                err.title = failed.last_error;
+                card.append(err);
+            }
             (entry.warnings || []).forEach((w) => card.append(el("div", "note note-warn", w)));
 
             const actions = el("div", "actions-bar");
             actions.append(
-                button("+ Nueva cola", "btn btn-ghost btn-sm", async () => {
+                button("Nueva cola", "btn btn-ghost btn-sm", async () => {
                     const created = await api(`/api/accounts/${account.id}/schedules`, {
                         method: "POST", body: JSON.stringify({name: ""}),
                     });
@@ -439,7 +460,7 @@ function renderOverview() {
                     toast(`Cola «${created.schedule.name}» creada`);
                     await state.refresh();
                     location.hash = "#/programacion";
-                }),
+                }, "plus"),
             );
             card.append(actions);
             return card;
@@ -579,7 +600,7 @@ function renderQueueHeader(entry, queue) {
         + (s.start_date ? ` · empieza el ${startLabel(s)}` : "");
     $("#queue-up").disabled = index === 0;
     $("#queue-down").disabled = index === entry.queues.length - 1;
-    $("#queue-hide").textContent = s.hidden ? "🙈 Mostrar" : "🙈 Ocultar";
+    setLabel($("#queue-hide"), s.hidden ? "eye" : "eye-off", s.hidden ? "Mostrar" : "Ocultar");
     $("#queue-hide").title = s.hidden
         ? "Volver a ofrecerla en la Biblioteca y con las demás pestañas de cola"
         : "Que no salga en la Biblioteca y quede al final de las pestañas, sin abrirse por defecto. Si está activa, sigue publicando.";
@@ -925,7 +946,8 @@ function renderQueueFolders(videos) {
 
 /** «📁 habitos ●●»: the folder of a queued video, with its labels' colours. */
 function folderMark(folder, first) {
-    const node = el("span", "queue-folder-mark", `${first ? "" : " · "}📁 ${folder}`);
+    const node = el("span", "queue-folder-mark", first ? "" : " · ");
+    node.append(icon("folder"), ` ${folder}`);
     (folderLabels()[folder] || []).forEach((label) => {
         const dot = paint(el("span", "lib-folder-dot"), labelColor(label));
         dot.title = label;
@@ -1132,7 +1154,7 @@ function renderQueue(entry, queue) {
         && ["QUEUED", "SCHEDULED"].includes(v.status)).length;
     const eta = state.data.captions?.eta_seconds;
     $("#queue-summary").textContent = `${shown.length} de ${videos.length}`
-        + (writing ? ` · ✍️ ${writing} texto${writing === 1 ? "" : "s"} en camino` : "")
+        + (writing ? ` · ${writing} texto${writing === 1 ? "" : "s"} en camino` : "")
         + (writing && eta ? ` (la cola de textos acaba en ~${fmtDuration(eta)})` : "");
 
     // Turns are the whole queue's, whatever folder is shown.
@@ -1212,7 +1234,8 @@ function renderQueue(entry, queue) {
                 const n = turns.get(v.id);
                 if (ordering && n && isMovable(v)) {
                     item.dataset.movable = "1";
-                    const handle = el("span", "item-drag", "⠿");
+                    const handle = el("span", "item-drag");
+                    handle.append(icon("grip"));
                     handle.dataset.videoId = v.id;
                     handle.title = state.queueSelected.has(v.id) && toMove > 1
                         ? `Arrastra para mover los ${toMove} seleccionados juntos`
@@ -1231,21 +1254,21 @@ function renderQueue(entry, queue) {
                     item.append(turn);
                 }
             }
-            item.append(el("span", `badge ${v.status}`, statusLabel(v.status)));
+            item.append(el("span", `status ${v.status}`, statusLabel(v.status)));
 
             const main = el("div", "item-main");
             main.append(el("div", "item-title", v.original_name));
             const bits = [];
             if (v.created_local && v.status !== "PUBLISHED") bits.push(`añadido ${v.created_local}`);
-            if (v.scheduled_local && ["QUEUED", "SCHEDULED"].includes(v.status)) bits.push(`⏱ ${v.scheduled_local}`);
+            if (v.scheduled_local && ["QUEUED", "SCHEDULED"].includes(v.status)) bits.push(`sale ${v.scheduled_local}`);
             if (v.status === "DELEGATED") {
                 bits.push(v.handed_over
-                    ? `🅩 Zernio publica el ${v.scheduled_local}`
-                    : "🅩 subiendo a Zernio…");
+                    ? `Zernio publica el ${v.scheduled_local}`
+                    : "subiendo a Zernio…");
             }
-            if (aigcOn(v, queue) && v.status !== "PUBLISHED") bits.push("🤖 IA");
-            if (v.published_local && v.status === "PUBLISHED") bits.push(`✓ ${v.published_local}`);
-            if (v.extra) bits.push("⚡ fuera de turno");
+            if (aigcOn(v, queue) && v.status !== "PUBLISHED") bits.push("etiqueta de IA");
+            if (v.published_local && v.status === "PUBLISHED") bits.push(`publicado ${v.published_local}`);
+            if (v.extra) bits.push("fuera de turno");
             if (v.duration_sec) bits.push(`${v.duration_sec}s`);
             if (v.resolution) bits.push(v.resolution);
             if (v.size_mb) bits.push(`${v.size_mb} MB`);
@@ -1268,64 +1291,73 @@ function renderQueue(entry, queue) {
             if (writable && v.caption_status && v.caption_status !== "none")
                 main.append(captionStatusLine(v));
             if (v.last_error) main.append(el("div", "item-error", v.last_error));
-            if (v.metrics) main.append(el("div", "item-metrics", metricsLine(v)));
+            if (v.metrics) {
+                const metrics = el("div", "item-metrics");
+                metrics.append(icon("trend"), ` ${metricsLine(v)}`);
+                main.append(metrics);
+            }
             if (v.post_url) main.append(link("Ver publicación", v.post_url, "small"));
             item.append(main);
 
+            /* Two or three buttons in sight; the rest under «Más». */
             const actions = el("div", "item-actions");
+            const more = [];
             if (v.status !== "PUBLISHED") actions.append(link("Ver", `/api/videos/${v.id}/file`, "btn btn-ghost btn-sm"));
             if (["QUEUED", "SCHEDULED"].includes(v.status)) {
-                const text = button("Texto", "btn btn-ghost btn-sm", () => openCaptionEditor(v, entry));
+                const text = button("Texto", "btn btn-ghost btn-sm", () => openCaptionEditor(v, entry), "pen");
                 text.title = "Título, descripción, hashtags y comentario fijado, con revisión y vista previa";
-                actions.append(
-                    text,
-                    button("Ahora", "btn btn-ghost btn-sm", async () => {
-                        const res = await api(`/api/videos/${v.id}/publish-now`, {method: "POST"});
-                        toast(res.message);
-                        state.refresh();
-                    }),
-                    aigcToggle(v, queue),
-                );
+                const now = button("Ahora", "btn btn-ghost btn-sm", async () => {
+                    if (!await confirmar(`Publicar ahora «${v.original_name}»`,
+                        {text: "Sale ya, fuera de turno, en el siguiente ciclo del planificador.", ok: "Publicar ahora"})) return;
+                    const res = await api(`/api/videos/${v.id}/publish-now`, {method: "POST"});
+                    toast(res.message);
+                    state.refresh();
+                }, "zap");
+                now.title = "Publicar ya, fuera de turno";
+                actions.append(text, now);
+                more.push(aigcToggle(v, queue));
                 const regen = regenerateButton(v);
-                if (regen) actions.append(regen);
+                if (regen) more.push(regen);
                 if (others.length) {
-                    actions.append(button("Mover a…", "btn btn-ghost btn-sm", () => openMoveDialog(v, others)));
+                    more.push(button("Mover a…", "btn btn-ghost btn-sm", () => openMoveDialog(v, others), "folder"));
                 }
             }
             if (v.status === "DELEGATED") {
                 actions.append(button("Recuperar", "btn btn-ghost btn-sm", async () => {
-                    if (!confirm(`¿Cancelar «${v.original_name}» en Zernio y devolverlo a la cola?`)) return;
+                    if (!await confirmar("Recuperar de Zernio",
+                        {text: `«${v.original_name}» se cancela en Zernio y vuelve a la cola.`, ok: "Recuperar"})) return;
                     const res = await api(`/api/videos/${v.id}/undelegate`, {method: "POST"});
                     toast(res.status === "PUBLISHED"
                         ? "Zernio ya lo había publicado: queda como publicado"
                         : "De vuelta en la cola");
                     state.refresh();
-                }));
+                }, "undo"));
                 // Not uploaded yet: its text can still be rewritten.
                 const regen = !v.handed_over && regenerateButton(v);
-                if (regen) actions.append(regen);
+                if (regen) more.push(regen);
             }
             if (v.status === "FAILED") {
                 actions.append(button("Reintentar", "btn btn-ghost btn-sm", async () => {
                     await api(`/api/videos/${v.id}/retry`, {method: "POST"});
                     toast("Vuelve a estar en la cola");
                     state.refresh();
-                }));
+                }, "refresh"));
             }
             // Also while uploading or processing: one that never finishes
             // blocks every other upload of the account. The server refuses an
             // upload that may really be running.
-            actions.append(button("Quitar", "btn btn-ghost btn-sm", async () => {
+            more.push(button("Quitar", "btn btn-ghost btn-sm btn-danger", async () => {
                 const question = {
                     DELEGATED: `«${v.original_name}» está programado en Zernio. ¿Cancelarlo allí y quitarlo de la lista?`,
                     PROCESSING: `«${v.original_name}» sigue «procesando» en Zernio y, mientras, esta cuenta no sube nada más. ¿Cancelarlo en Zernio (si aún lo tiene) y quitarlo de la cola?`,
                     UPLOADING: `«${v.original_name}» figura como «subiendo». ¿Quitarlo de la cola? Si la subida sigue en marcha, no te dejará.`,
-                }[v.status] || `¿Quitar «${v.original_name}» de la cola?`;
-                if (!confirm(question)) return;
+                }[v.status] || `«${v.original_name}» sale de la cola. Sigue en la biblioteca.`;
+                if (!await confirmar("Quitar de la cola", {text: question, ok: "Quitar", danger: true})) return;
                 const res = await api(`/api/videos/${v.id}`, {method: "DELETE"});
                 if (res && res.published) toast("Zernio ya lo había publicado: queda como publicado");
                 state.refresh();
-            }));
+            }, "trash"));
+            actions.append(pop("", more));
             item.append(actions);
             return item;
         }),
@@ -1356,14 +1388,15 @@ function focusQueueRow(list) {
  *  The queue decides what a video is born with; this takes it back. */
 function aigcToggle(video, queue) {
     const on = aigcOn(video, queue);
-    const btn = button(on ? "🤖 IA" : "🤖 IA no", `btn btn-ghost btn-sm${on ? " is-on" : ""}`,
+    const btn = button(on ? "IA" : "IA no", `btn btn-ghost btn-sm${on ? " is-on" : ""}`,
         async () => {
             await api(`/api/videos/${video.id}`, {
                 method: "PATCH", body: JSON.stringify({is_aigc: !on}),
             });
             toast(on ? "Ya no se declara como generado por IA" : "Se declarará como generado por IA");
             state.refresh();
-        });
+        }, "bot");
+    btn.setAttribute("aria-pressed", String(on));
     btn.title = on
         ? "Este vídeo se publicará declarado como contenido generado por IA. Haz clic para quitarle la etiqueta."
         : "Este vídeo se publicará sin la etiqueta de IA. Haz clic para ponérsela.";
@@ -1391,9 +1424,9 @@ function renderHandover(entry, queue) {
         : `Mandar las carpetas${of} a Zernio`;
     const btn = $("#handover-btn");
     btn.disabled = pending.length === 0;
-    btn.textContent = pending.length
+    setLabel(btn, "send", pending.length
         ? `Enviar ${pending.length} vídeo(s)${of} a Zernio…`
-        : `No hay vídeos pendientes${of} que enviar`;
+        : `No hay vídeos pendientes${of} que enviar`);
 
     const cancel = $("#handover-cancel");
     cancel.hidden = recoverable.length === 0;
@@ -1451,7 +1484,7 @@ async function openHandoverDialog(queue) {
     }
     if (isShuffled(waitingVideos(currentAccount()?.videos || [], queue.schedule.id))) {
         body.append(el("div", "note note-info",
-            "🔀 Van en el orden que dejó «Mezclar», el mismo de la lista de la cola."));
+            "Van en el orden que dejó «Mezclar», el mismo de la lista de la cola."));
     }
     (plan.warnings || []).forEach((w) => body.append(el("div", "note note-warn", w)));
 
@@ -1463,8 +1496,8 @@ async function openHandoverDialog(queue) {
         main.append(el("div", "plan-name", post.name));
         const marks = [];
         if (post.gap_minutes) marks.push(`+${post.gap_minutes} min`);
-        if (post.is_aigc) marks.push("🤖 IA");
-        if (post.caption_pending) marks.push("✍️ texto en camino");
+        if (post.is_aigc) marks.push("etiqueta de IA");
+        if (post.caption_pending) marks.push("texto en camino");
         main.append(el("div", "muted small", marks.join(" · ")));
         row.append(main);
         row.append(el("span", "plan-when", post.local));
@@ -1507,7 +1540,7 @@ function regenerateButton(v) {
             } catch (err) {
                 toast(err.message, true);
             }
-        });
+        }, "sparkles");
 }
 
 /** The texts of one queued video, in the composer (composer.js). */
@@ -1588,8 +1621,8 @@ function captionStatusLine(v) {
     switch (v.caption_status) {
         case "pending":
             return el("div", "item-ai pending", fromLibrary
-                ? "📚 La biblioteca está escribiendo sus textos; llegarán solos…"
-                : "✍️ Texto automático en cola…");
+                ? "La biblioteca está escribiendo sus textos; llegarán solos…"
+                : "Texto automático en cola…");
         case "generating": {
             const line = el("div", "item-ai generating");
             line.append(el("span", "pulse"), document.createTextNode(" Escuchando el vídeo y escribiendo el texto…"));
@@ -1598,8 +1631,8 @@ function captionStatusLine(v) {
         case "done": {
             const note = v.caption_error ? ` · ${v.caption_error}` : "";
             const line = el("div", "item-ai done", fromLibrary
-                ? `📚 Textos de la biblioteca${note}`
-                : `✍️ Texto generado · ${source}${note}`);
+                ? `Textos de la biblioteca${note}`
+                : `Texto generado · ${source}${note}`);
             const fromSheet = (v.caption_source || "").startsWith("ficha");
             const heard = v.transcript_excerpt || v.transcript;
             if (heard) line.title = `${fromSheet ? "Guion (de la ficha .txt)" : "Transcripción"}: ${heard}`
@@ -1607,7 +1640,11 @@ function captionStatusLine(v) {
             return line;
         }
         case "failed":
-            return el("div", "item-ai failed", `⚠️ Texto automático: ${v.caption_error || "falló"}. Se publica con el texto actual.`);
+        {
+            const line = el("div", "item-ai failed");
+            line.append(icon("alert"), ` Texto automático: ${v.caption_error || "falló"}. Se publica con el texto actual.`);
+            return line;
+        }
         default:
             return el("div", "item-ai", "");
     }
@@ -1627,7 +1664,7 @@ function metricsLine(v) {
         `${nf.format(m.comments)} comentarios`, `${nf.format(m.shares)} compartidos`];
     if (m.engagement_rate) bits.push(`${m.engagement_rate}% interacción`);
     if (m.completion_rate) bits.push(`${Math.round(m.completion_rate * 100)}% visto entero`);
-    return `📈 ${bits.join(" · ")}`;
+    return bits.join(" · ");
 }
 
 let analyticsCache = null;
@@ -1821,7 +1858,8 @@ function renderComments() {
             const actions = el("div", "item-actions");
             if (!c.is_owner) {
                 actions.append(button("Responder", "btn btn-ghost btn-sm", async () => {
-                    const message = prompt(`Responder a @${c.author}:`, "");
+                    const message = await pedir(`Responder a @${c.author}`, "Respuesta",
+                        {text: c.message, ok: "Enviar", multiline: true});
                     if (message === null || !message.trim()) return;
                     try {
                         await api(`/api/comments/${c.id}/reply`,
@@ -1833,7 +1871,7 @@ function renderComments() {
                     } catch (err) {
                         toast(err.message, true);
                     }
-                }));
+                }, "send"));
                 actions.append(button(c.hidden ? "Mostrar" : "Ocultar", "btn btn-ghost btn-sm",
                     async () => {
                         try {
@@ -1845,9 +1883,9 @@ function renderComments() {
                         } catch (err) {
                             toast(err.message, true);
                         }
-                    }));
+                    }, c.hidden ? "eye" : "eye-off"));
                 // Answered in the TikTok app, or nothing to answer: by hand.
-                actions.append(button(c.answered ? "Marcar sin responder" : "✓ Respondido",
+                actions.append(button(c.answered ? "Marcar sin responder" : "Respondido",
                     "btn btn-ghost btn-sm", async () => {
                         try {
                             await api(`/api/comments/${c.id}/answered`,
@@ -1858,7 +1896,7 @@ function renderComments() {
                         } catch (err) {
                             toast(err.message, true);
                         }
-                    }));
+                    }, c.answered ? "undo" : "check"));
             }
             if (c.post_url) actions.append(link("Vídeo", c.post_url, "btn btn-ghost btn-sm"));
             item.append(actions);
@@ -2187,12 +2225,11 @@ function wireNavMenus() {
 async function createQueue(copyFrom = null) {
     const entry = currentAccount();
     if (!entry) return;
-    const name = prompt(
-        copyFrom
-            ? "Nombre de la copia (por ejemplo «Noche»):"
-            : "Nombre de la nueva cola (por ejemplo «Noche»):",
-        copyFrom ? `${copyFrom.name} (copia)` : `Cola ${entry.queues.length + 1}`
-    );
+    const name = await pedir(copyFrom ? "Duplicar la cola" : "Nueva cola", "Nombre", {
+        text: copyFrom ? `Una cola nueva con las reglas de «${copyFrom.name}».` : "Por ejemplo, «Noche».",
+        value: copyFrom ? `${copyFrom.name} (copia)` : `Cola ${entry.queues.length + 1}`,
+        ok: copyFrom ? "Duplicar" : "Crear",
+    });
     if (name === null) return;
     const body = {name: name.trim()};
     if (copyFrom) body.copy_from = copyFrom.id;
@@ -2327,7 +2364,7 @@ function wireQueueBar() {
     $("#queue-rename").addEventListener("click", async () => {
         const queue = currentQueue();
         if (!queue) return;
-        const name = prompt("Nombre de la cola:", queue.schedule.name);
+        const name = await pedir("Renombrar la cola", "Nombre", {value: queue.schedule.name, ok: "Renombrar"});
         if (name === null || !name.trim()) return;
         try {
             const res = await api(`/api/schedules/${queue.schedule.id}`, {
@@ -2484,7 +2521,7 @@ function wireQueue() {
 
     /** Take back from Zernio: the whole queue, one folder, or the ticked videos. */
     async function recover(queue, scope, question) {
-        if (!confirm(question)) return;
+        if (!await confirmar("Recuperar de Zernio", {text: question, ok: "Recuperar"})) return;
         try {
             const res = await api(`/api/schedules/${queue.schedule.id}/delegation/cancel`, {
                 method: "POST", body: JSON.stringify(scope),
@@ -2526,8 +2563,8 @@ function wireQueue() {
         const queue = currentQueue();
         const ids = selectedWhere(isWaiting).map((v) => v.id);
         if (!queue || !ids.length) return;
-        if (!confirm(`¿Quitar ${ids.length} vídeo(s) de «${queue.schedule.name}»? `
-            + "Siguen en la biblioteca y puedes volver a añadirlos.")) return;
+        if (!await confirmar(`Quitar ${ids.length} vídeo(s) de «${queue.schedule.name}»`,
+            {text: "Siguen en la biblioteca y puedes volver a añadirlos.", ok: "Quitar", danger: true})) return;
         try {
             const res = await api(`/api/schedules/${queue.schedule.id}/videos/remove`, {
                 method: "POST", body: JSON.stringify({video_ids: ids}),
@@ -2547,14 +2584,17 @@ function wireQueue() {
     };
     $("#queue-move-top").addEventListener("click", () => moveSelected({position: 1}));
     $("#queue-move-bottom").addEventListener("click", () => moveSelected({position: 1_000_000}));
-    $("#queue-move-to").addEventListener("click", () => {
+    $("#queue-move-to").addEventListener("click", async () => {
         const queue = currentQueue();
         const entry = currentAccount();
         if (!queue || !entry) return;
         const total = waitingVideos(entry.videos || [], queue.schedule.id).length;
         const count = selectedWhere(isMovable).length;
-        const answer = prompt(`¿A qué turno van ${count === 1 ? "el seleccionado" : `los ${count} seleccionados`}? (1–${total})\n`
-            + (count > 1 ? "Van juntos, en el orden que tenían, empezando en ese turno." : ""));
+        const answer = await pedir(`¿A qué turno ${count === 1 ? "va el seleccionado" : `van los ${count} seleccionados`}?`,
+            `Turno (1–${total})`, {
+                text: count > 1 ? "Van juntos, en el orden que tenían, empezando en ese turno." : "",
+                ok: "Mover",
+            });
         if (answer === null) return;
         const turn = Math.round(Number(answer));
         if (!Number.isFinite(turn) || turn < 1) {

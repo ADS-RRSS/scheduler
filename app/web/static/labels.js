@@ -1,7 +1,7 @@
 /* Folder labels: their colours, and the picker that combines folders and labels
    (the queue's «Añadir desde la biblioteca» and the Cola page's folder filter). */
 
-import {el, state} from "./shared.js";
+import {el, icon, state} from "./shared.js";
 
 /* The --acc-0…7 of app.css (what a label gets from its name), then a few more to pick from. */
 export const AUTO_COLORS = ["#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#ec4899", "#14b8a6", "#f97316", "#84cc16"];
@@ -56,8 +56,9 @@ export function labelDots(labels) {
 /** One label's two switches: «con» (✓) and «sin» (✕); a second click turns it off. */
 function labelSwitches(mode, titles, onPick) {
     const box = el("span", "lib-lf-switch");
-    [["include", "✓"], ["exclude", "✕"]].forEach(([value, text]) => {
-        const b = el("button", `lib-lf-btn is-${value}${mode === value ? " is-on" : ""}`, text);
+    [["include", "check"], ["exclude", "x"]].forEach(([value, name]) => {
+        const b = el("button", `lib-lf-btn is-${value}${mode === value ? " is-on" : ""}`);
+        b.append(icon(name));
         b.type = "button";
         b.title = mode === value ? "Quitar del filtro" : titles[value];
         b.setAttribute("aria-pressed", String(mode === value));
@@ -127,12 +128,12 @@ export function labelMatch(scope, onPick) {
         ...[["all", "todas"], ["any", "alguna"]].map(([value, text]) => {
             const b = el("button", `chip${scope.match === value ? " is-active" : ""}`, text);
             b.type = "button";
-            b.title = value === "all" ? "Las carpetas que tienen todas las marcadas con ✓"
-                : "Las carpetas que tienen al menos una de las marcadas con ✓";
+            b.title = value === "all" ? "Las carpetas que tienen todas las etiquetas marcadas"
+                : "Las carpetas que tienen al menos una de las etiquetas marcadas";
             b.addEventListener("click", () => onPick(value));
             return b;
         }),
-        el("span", "muted small", "las ✓"));
+        el("span", "muted small", "las marcadas"));
     return match;
 }
 
@@ -209,14 +210,14 @@ export function scopeSuffix(scope) {
 /** A short name for the picker's button. */
 function scopeSummary(scope) {
     const where = !scope.folders.length ? "Todas las carpetas"
-        : scope.folders.length === 1 ? `📁 ${scope.folders[0]}` : `📁 ${scope.folders.length} carpetas`;
+        : scope.folders.length === 1 ? scope.folders[0] : `${scope.folders.length} carpetas`;
     const tags = [
         scope.labels.join(scope.match === "any" ? " o " : " + "),
         scope.exclude?.length && `sin ${scope.exclude.join(", ")}`,
         scope.unlabeled === "include" && (scope.labels.length ? "o sin etiquetas" : "sin etiquetas"),
         scope.unlabeled === "exclude" && "con alguna",
     ].filter(Boolean).join(" · ");
-    return tags ? `${where} · 🏷️ ${tags}` : where;
+    return tags ? `${where} · ${tags}` : where;
 }
 
 /**
@@ -363,7 +364,9 @@ export function scopePicker({
 
         toggle.replaceChildren(el("span", "scope-toggle-text", scopeSummary(scope)));
         if (scope.labels.length) toggle.append(labelDots(scope.labels));
-        toggle.append(el("span", "scope-caret", "▾"));
+        const caret = el("span", "scope-caret");
+        caret.append(icon("chevron"));
+        toggle.append(caret);
         toggle.classList.toggle("is-scoped", !isEmptyScope(scope));
         toggle.title = isEmptyScope(scope) ? "Todas las carpetas"
             : `${kept.length} carpeta(s)${scopeSuffix(scope)} · ${total} ${unit}`;

@@ -121,8 +121,57 @@ export function link(text, href, className, newTab = true) {
     return a;
 }
 
-export function button(label, className, onClick) {
-    const b = el("button", className, label);
+/** An inline icon from the sprite in index.html: icon("trash") → <svg class="ic"><use href="#i-trash"/></svg>. */
+export function icon(name, className = "ic") {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", className);
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#i-${name}`);
+    svg.append(use);
+    return svg;
+}
+
+/** The button's content: an optional icon and its text (or only the icon, with the text as aria-label). */
+export function setLabel(node, iconName, text, {iconOnly = false} = {}) {
+    node.replaceChildren(...(iconName ? [icon(iconName)] : []), ...(iconOnly ? [] : [document.createTextNode(text)]));
+    if (iconOnly) node.setAttribute("aria-label", text);
+    return node;
+}
+
+/** «Más»: a small menu (details.pop) with the actions that need no button of their own. */
+export function pop(label, items, {iconName = "more", small = true, className = ""} = {}) {
+    const d = el("details", `pop${small ? " sm" : ""}${className ? ` ${className}` : ""}`);
+    const s = el("summary");
+    s.append(icon(iconName), ...(label ? [document.createTextNode(label)] : []));
+    s.setAttribute("aria-label", label || "Más acciones");
+    if (!label) s.title = "Más acciones";
+    const panel = el("div", "pop-panel");
+    panel.append(...items.filter(Boolean));
+    d.append(s, panel);
+    // An action closes the menu.
+    panel.addEventListener("click", (e) => {
+        if (e.target.closest("button, a")) d.open = false;
+    });
+    return d;
+}
+
+/* Open menus close on a click elsewhere or with Escape. */
+document.addEventListener("click", (e) => {
+    $$("details.pop[open]").forEach((d) => {
+        if (!d.contains(e.target)) d.open = false;
+    });
+});
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") $$("details.pop[open]").forEach((d) => {
+        d.open = false;
+    });
+});
+
+export function button(label, className, onClick, iconName = null) {
+    const b = el("button", className);
+    if (iconName) b.append(icon(iconName));
+    if (label) b.append(document.createTextNode(label));
     b.type = "button";
     b.addEventListener("click", async () => {
         b.disabled = true;
@@ -138,8 +187,10 @@ export function button(label, className, onClick) {
 }
 
 /* Asked before the user closes the dialog (Cerrar, a click outside, Esc):
-   returning false keeps it open. Closing it from code never asks. */
+   returning false (or a promise of false) keeps it open. Closing it from code never asks. */
 let closeGuard = null;
+/* Where the focus was before the modal opened: it goes back there on close. */
+let modalOpener = null;
 
 export function openModal(title, bodyNode, {wide = false, className = "", beforeClose = null} = {}) {
     $("#modal-title").textContent = title;
@@ -150,20 +201,84 @@ export function openModal(title, bodyNode, {wide = false, className = "", before
     card.classList.toggle("is-wide", wide);
     if (className) card.classList.add(className);
     closeGuard = beforeClose;
+    if ($("#modal").hidden) modalOpener = document.activeElement;
     $("#modal").hidden = false;
+    // The focus moves into the dialog: the first field, or else its title.
+    const first = body.querySelector("input:not([type=hidden]):not([type=checkbox]), textarea, select, button");
+    (first || card).focus({preventScroll: true});
 }
 
 export function closeModal() {
     closeGuard = null;
     $("#modal").hidden = true;
     $("#modal-body").replaceChildren();
+    if (modalOpener && modalOpener.isConnected) modalOpener.focus({preventScroll: true});
+    modalOpener = null;
 }
 
 /** The user wants the dialog gone: the dialog may still say no (unsaved changes). */
 export function requestCloseModal() {
     if ($("#modal").hidden) return;
-    if (closeGuard && closeGuard() === false) return;
+    const answer = closeGuard ? closeGuard() : true;
+    if (answer instanceof Promise) {
+        answer.then((ok) => {
+            if (ok !== false) closeModal();
+        });
+        return;
+    }
+    if (answer === false) return;
     closeModal();
+}
+
+/* ------------------------------------------------------------------ */
+/* Dialog: confirm() and prompt() with the panel's look                */
+
+/* ------------------------------------------------------------------ */
+
+/** Opens #dlg and resolves with true/false (or the text/null when there is a field).
+ *  Enter accepts, Escape cancels; the same contract as Tunnel's. */
+export function dialogo({title, text = "", ok = "Aceptar", danger = false, field = null, value = "",
+                            placeholder = "", multiline = false}) {
+    const d = $("#dlg"), okb = $("#dlg-ok");
+    $("#dlg-title").textContent = title;
+    $("#dlg-text").textContent = text;
+    $("#dlg-text").hidden = !text;
+    const input = multiline ? $("#dlg-textarea") : $("#dlg-input");
+    $("#dlg-field").hidden = !field || multiline;
+    $("#dlg-area").hidden = !field || !multiline;
+    $(multiline ? "#dlg-area-label" : "#dlg-label").textContent = field || "";
+    input.value = value;
+    input.placeholder = placeholder;
+    okb.textContent = ok;
+    okb.className = danger ? "btn btn-danger fill" : "btn btn-primary";
+    return new Promise((resolve) => {
+        const onClose = () => {
+            d.removeEventListener("close", onClose);
+            const accepted = d.returnValue === "ok";
+            resolve(field ? (accepted ? input.value : null) : accepted);
+        };
+        d.addEventListener("close", onClose);
+        d.returnValue = "";
+        d.showModal();
+        if (field) {
+            input.focus();
+            input.select();
+        } else okb.focus();
+    });
+}
+
+export const confirmar = (title, opts = {}) => dialogo({title, ...opts});
+export const pedir = (title, field, opts = {}) => dialogo({title, field, ...opts});
+
+/* Wired once: Cancelar closes without a value; ⌘/Ctrl+Enter accepts a multiline field. */
+if ($("#dlg")) {
+    $("#dlg-cancel").addEventListener("click", () => $("#dlg").close(""));
+    $("#dlg-textarea").addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            $("#dlg").close("ok");
+        }
+    });
 }
 
 export async function copyText(text) {

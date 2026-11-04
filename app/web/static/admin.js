@@ -8,6 +8,9 @@ import {
     api,
     button,
     closeModal,
+    confirmar,
+    icon,
+    pedir,
     copyText,
     editingInside,
     el,
@@ -293,8 +296,9 @@ export function renderAccountsPage() {
                 const {schedule: s, stats: qs} = q;
                 const row = el("div", "queue-row");
                 const head = el("div", "queue-row-head");
-                head.append(el("span", `queue-dot ${s.enabled ? "on" : "off"}`, s.enabled ? "●" : "○"),
-                    el("strong", null, s.name));
+                const dot = el("span", `queue-dot ${s.enabled ? "on" : "off"}`);
+                dot.title = s.enabled ? "Programación activa" : "Programación parada";
+                head.append(dot, el("strong", null, s.name));
                 if (s.to_drafts) head.append(el("span", "badge SCHEDULED", "a borradores"));
                 row.append(head);
                 row.append(el("span", "muted small",
@@ -307,24 +311,26 @@ export function renderAccountsPage() {
                     setAccount(account.id);
                     setQueue(s.id);
                     location.hash = "#/programacion";
-                }));
+                }, "clock"));
                 row.append(go);
                 list.append(row);
             });
             card.append(list);
             (entry.warnings || []).forEach((w) => card.append(el("div", "note note-warn", w)));
 
-            const actions = el("div", "actions-bar");
+            /* Lo de la cuenta a la izquierda; eliminar, aparte, a la derecha. */
+            const actions = el("div", "actions-bar account-actions");
             actions.append(
                 button("Probar conexión", "btn btn-ghost btn-sm", async () => {
                     const res = await api(`/api/accounts/${account.id}/test`, {method: "POST"});
                     toast(res.message, !res.ok);
                     await state.refresh();
-                }),
-                button("Mostrar clave", "btn btn-ghost btn-sm", () => revealKey(account)),
-                button("Sustituir clave", "btn btn-ghost btn-sm", () => replaceKey(account)),
+                }, "refresh"),
+                button("Mostrar clave", "btn btn-ghost btn-sm", () => revealKey(account), "eye"),
+                button("Sustituir clave", "btn btn-ghost btn-sm", () => replaceKey(account), "pencil"),
                 button("Renombrar", "btn btn-ghost btn-sm", async () => {
-                    const name = prompt("Nombre para mostrar:", account.display_name || "");
+                    const name = await pedir("Renombrar la cuenta", "Nombre para mostrar",
+                        {value: account.display_name || "", ok: "Renombrar"});
                     if (name === null) return;
                     await api(`/api/accounts/${account.id}`, {
                         method: "PATCH",
@@ -334,8 +340,8 @@ export function renderAccountsPage() {
                     await state.refresh();
                 }),
                 button("Añadir cola", "btn btn-ghost btn-sm", async () => {
-                    const name = prompt("Nombre de la nueva cola (por ejemplo «Noche»):",
-                        `Cola ${entry.queues.length + 1}`);
+                    const name = await pedir("Nueva cola", "Nombre",
+                        {text: "Por ejemplo, «Noche».", value: `Cola ${entry.queues.length + 1}`, ok: "Crear"});
                     if (name === null) return;
                     const created = await api(`/api/accounts/${account.id}/schedules`, {
                         method: "POST", body: JSON.stringify({name: name.trim()}),
@@ -345,17 +351,20 @@ export function renderAccountsPage() {
                     toast(`Cola «${created.schedule.name}» creada`);
                     await state.refresh();
                     location.hash = "#/programacion";
-                }),
+                }, "plus"),
                 button("Ir a la cola", "btn btn-ghost btn-sm", () => {
                     setAccount(account.id);
                     location.hash = "#/cola";
-                }),
-                button("Eliminar", "btn btn-danger btn-sm", async () => {
-                    if (!confirm(`¿Eliminar ${accountLabel(account)} y sus ${entry.queues.length} cola(s) de esta app?\n\nLos archivos de vídeo se quedan en disco. En Zernio no cambia nada.`)) return;
+                }, "list"),
+                button("Eliminar", "btn btn-ghost btn-sm btn-danger account-actions-end", async () => {
+                    if (!await confirmar(`Eliminar ${accountLabel(account)}`, {
+                        text: `Se quita de esta app con sus ${entry.queues.length} cola(s). Los archivos de vídeo se quedan en disco. En Zernio no cambia nada.`,
+                        ok: "Eliminar", danger: true,
+                    })) return;
                     await api(`/api/accounts/${account.id}`, {method: "DELETE"});
                     toast("Cuenta eliminada");
                     await state.refresh();
-                }),
+                }, "trash"),
             );
             card.append(actions);
             return card;
@@ -457,7 +466,7 @@ function renderSystem() {
             ? `cada ${s.backups.auto_hours} h · se guardan las ${s.backups.keep} últimas (BACKUP_AUTO_HOURS, BACKUP_KEEP)`
             : "desactivadas (BACKUP_AUTO_HOURS=0)"],
         ...(s.disk ? [["Disco", `${fmtBytes(s.disk.free)} libres de ${fmtBytes(s.disk.total)}`
-        + (s.disk.low ? " · ⚠ queda poco" : "")]] : []),
+        + (s.disk.low ? " · queda poco" : "")]] : []),
     ];
     rows.forEach(([k, v]) => info.append(el("dt", null, k), el("dd", null, v)));
     renderBackups(s.backups.items);
@@ -470,7 +479,7 @@ function aiSummary(ai) {
         ? `Whisper «${ai.whisper.model}» (${ai.whisper.language})${ai.whisper.cached ? "" : " · modelo pendiente de descargar"}`
         : `Whisper no disponible: ${ai.whisper.error}`;
     const ollama = ai.ollama.reachable
-        ? `Ollama ${ai.ollama.model} ✓`
+        ? `Ollama ${ai.ollama.model} en marcha`
         : (ai.ollama.url ? `Ollama no disponible (${ai.ollama.error}) → texto = primera frase` : "sin Ollama → texto = primera frase");
     const busy = ai.current_video_id ? " · escribiendo ahora" : "";
     return `${whisper} · ${ollama} · ${ai.processed} generados${busy}`;
@@ -492,11 +501,11 @@ function renderBackups(items) {
         const actions = el("div", "item-actions");
         actions.append(
             link("Descargar", `/api/admin/backups/${encodeURIComponent(b.name)}`, "btn btn-ghost btn-sm", false),
-            button("Borrar", "btn btn-ghost btn-sm", async () => {
-                if (!confirm(`¿Borrar la copia ${b.name}?`)) return;
+            button("Borrar", "btn btn-ghost btn-sm btn-danger", async () => {
+                if (!await confirmar("Borrar la copia", {text: b.name, ok: "Borrar", danger: true})) return;
                 await api(`/api/admin/backups/${encodeURIComponent(b.name)}`, {method: "DELETE"});
                 await loadSystem();
-            }),
+            }, "trash"),
         );
         row.append(actions);
         list.append(row);
@@ -527,7 +536,7 @@ export function wireAdmin() {
     });
     $("#maint-prune").addEventListener("click", async () => {
         const keep = Number($("#maint-keep").value || 500);
-        if (!confirm(`¿Recortar el registro dejando las últimas ${keep} entradas?`)) return;
+        if (!await confirmar("Recortar el registro", {text: `Se quedan las últimas ${keep} entradas.`, ok: "Recortar", danger: true})) return;
         try {
             const res = await api("/api/admin/events/prune", {method: "POST", body: JSON.stringify({keep})});
             toast(`${res.removed} entradas eliminadas`);
@@ -537,7 +546,8 @@ export function wireAdmin() {
         }
     });
     $("#maint-clear-failed").addEventListener("click", async () => {
-        if (!confirm("¿Quitar todos los vídeos fallidos de todas las colas? Sus archivos siguen en la biblioteca.")) return;
+        if (!await confirmar("Quitar los vídeos fallidos de todas las colas",
+            {text: "Sus archivos siguen en la biblioteca.", ok: "Quitar", danger: true})) return;
         try {
             const res = await api("/api/admin/videos/clear-failed", {
                 method: "POST", body: JSON.stringify({delete_files: false}),
@@ -642,7 +652,11 @@ function renderTable() {
     data.columns.forEach((c) => {
         const th = el("th", c.pk ? "is-pk" : "");
         th.append(document.createTextNode(c.name));
-        if (db.sort === c.name) th.append(el("span", "sort", db.dir === "asc" ? " ↑" : " ↓"));
+        if (db.sort === c.name) {
+            const sort = el("span", "sort");
+            sort.append(" ", icon(db.dir === "asc" ? "up" : "down"));
+            th.append(sort);
+        }
         th.title = `${c.type}${c.nullable ? "" : " · NOT NULL"}${c.secret ? " · cifrado" : ""}`;
         th.addEventListener("click", () => {
             if (db.sort === c.name) db.dir = db.dir === "asc" ? "desc" : "asc";
@@ -674,19 +688,19 @@ function renderTable() {
 
     const pager = $("#db-pager");
     pager.replaceChildren(
-        button("‹ Anterior", "btn btn-ghost btn-sm", () => {
+        button("Anterior", "btn btn-ghost btn-sm", () => {
             if (db.page > 1) {
                 db.page -= 1;
                 loadTable();
             }
-        }),
+        }, "left"),
         el("span", "muted small", `Página ${data.page} de ${data.pages}`),
-        button("Siguiente ›", "btn btn-ghost btn-sm", () => {
+        button("Siguiente", "btn btn-ghost btn-sm", () => {
             if (db.page < data.pages) {
                 db.page += 1;
                 loadTable();
             }
-        }),
+        }, "right"),
     );
 }
 
@@ -731,7 +745,8 @@ async function openRow(pk) {
                 await state.refresh();
             }),
             button("Borrar fila", "btn btn-danger btn-sm", async () => {
-                if (!confirm(`¿Borrar la fila ${pk} de ${db.table}? Esta acción no se puede deshacer.`)) return;
+                if (!await confirmar(`Borrar la fila ${pk} de ${db.table}`,
+                    {text: "No se puede deshacer.", ok: "Borrar", danger: true})) return;
                 await api(`/api/db/tables/${encodeURIComponent(db.table)}/rows/${encodeURIComponent(pk)}`, {method: "DELETE"});
                 closeModal();
                 toast("Fila borrada");

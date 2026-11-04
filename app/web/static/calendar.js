@@ -16,6 +16,7 @@ import {
     closeModal,
     drawPlatformChips,
     el,
+    icon,
     openModal,
     PLATFORM_NAMES,
     setAccount,
@@ -28,13 +29,13 @@ const HOUR_PX = 36;
 const REFRESH_MS = 60000;
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 export const KINDS = {
-    published: {icon: "✓", label: "publicado"},
-    delegated: {icon: "🅩", label: "en Zernio (publica solo)"},
-    handover: {icon: "⇡", label: "subiéndose a Zernio"},
-    scheduled: {icon: "⏱", label: "programado aquí"},
-    uploading: {icon: "⇡", label: "subiéndose ahora"},
-    projected: {icon: "◌", label: "previsto por las reglas"},
-    failed: {icon: "✕", label: "fallido"},
+    published: {icon: "check", label: "publicado"},
+    delegated: {icon: "z", label: "en Zernio (publica solo)"},
+    handover: {icon: "upload", label: "subiéndose a Zernio"},
+    scheduled: {icon: "clock", label: "programado aquí"},
+    uploading: {icon: "upload", label: "subiéndose ahora"},
+    projected: {icon: "hourglass", label: "previsto por las reglas"},
+    failed: {icon: "x", label: "fallido"},
 };
 // The queue list's status filter that shows a video of each kind.
 const QUEUE_FILTER = {
@@ -140,7 +141,7 @@ function openMark(mark) {
 
 function describe(mark) {
     return `${mark.time} · ${labelOf(mark.account_id)} · ${mark.queue || "sin cola"}\n`
-        + `${mark.name}\n${KINDS[mark.kind]?.icon || ""} ${KINDS[mark.kind]?.label || mark.kind}`;
+        + `${mark.name}\n${KINDS[mark.kind]?.label || mark.kind}`;
 }
 
 function drawLegend(data) {
@@ -173,12 +174,15 @@ function openDay(day, marks) {
         marks.forEach((mark) => {
             const row = el("button", `cal-agenda-row ${mark.kind}`);
             row.type = "button";
+            const kind = el("span", "cal-agenda-kind");
+            if (KINDS[mark.kind]) kind.append(icon(KINDS[mark.kind].icon), " ");
+            kind.append(KINDS[mark.kind]?.label || mark.kind);
             const dot = el("span", "cal-swatch");
             dot.style.setProperty("--c", accountColor(mark.account_id));
             row.append(el("span", "cal-agenda-time", mark.time), dot,
                 el("span", "cal-agenda-who", `${labelOf(mark.account_id)} · ${mark.queue || "sin cola"}`),
                 el("span", "cal-agenda-name", mark.name),
-                el("span", "cal-agenda-kind", `${KINDS[mark.kind]?.icon || ""} ${KINDS[mark.kind]?.label || mark.kind}`));
+                kind);
             row.title = mark.schedule_id ? "Abrir su cola con el vídeo a la vista" : "";
             row.addEventListener("click", () => openMark(mark));
             body.append(row);

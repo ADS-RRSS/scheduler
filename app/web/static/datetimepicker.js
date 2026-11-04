@@ -2,7 +2,7 @@
    minute next to it. No library: it speaks the app's colours and Spanish, and
    it works without internet like the rest of the page. */
 
-import {el} from "./shared.js";
+import {el, icon} from "./shared.js";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
     "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -155,8 +155,9 @@ export function dateTimePicker({
 
     /* ---- the parts of the panel, built once and redrawn ---- */
     const title = el("strong", "dtp-month");
-    const nav = (text, label, step) => {
-        const b = el("button", "dtp-nav", text);
+    const nav = (name, label, step) => {
+        const b = el("button", "dtp-nav");
+        b.append(icon(name));
         b.type = "button";
         b.setAttribute("aria-label", label);
         b.addEventListener("click", () => {
@@ -165,8 +166,8 @@ export function dateTimePicker({
         });
         return b;
     };
-    const prev = nav("‹", "Mes anterior", -1);
-    const next = nav("›", "Mes siguiente", 1);
+    const prev = nav("left", "Mes anterior", -1);
+    const next = nav("right", "Mes siguiente", 1);
     const head = el("div", "dtp-head");
     head.append(prev, title, next);
     const grid = el("div", "dtp-grid");
@@ -320,7 +321,7 @@ export function dateTimePicker({
     }
 
     function drawToggle() {
-        toggle.replaceChildren(el("span", "dtp-icon", "📅"),
+        toggle.replaceChildren(icon("calendar"),
             el("span", null, custom && value.day ? shortLabel(value.day, value.time) : placeholder));
         toggle.classList.toggle("is-active", custom && Boolean(value.day));
     }

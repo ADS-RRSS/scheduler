@@ -13,7 +13,7 @@
 
    Nothing is saved until «Guardar». No framework, no build step. */
 
-import {api, button, closeModal, el, openModal, toast} from "./shared.js";
+import {api, button, closeModal, confirmar, el, icon, openModal, toast} from "./shared.js";
 
 const LABEL = {tiktok: "TikTok", youtube: "YouTube"};
 const LIMITS = {
@@ -25,9 +25,9 @@ const COUNTED = 5;
 const MAX_TAGS = 30;
 const GENERIC = new Set(["parati", "fyp", "fypシ", "foryou", "foryoupage", "viral", "viralvideo",
     "tiktok", "trending", "reels", "xyzbca"]);
-const LEVEL_ICON = {error: "⛔", warn: "⚠️", tip: "💡"};
+const LEVEL_ICON = {error: "ban", warn: "alert", tip: "bulb"};
 const LEVEL_NAMES = {error: ["error", "errores"], warn: ["aviso", "avisos"], tip: ["sugerencia", "sugerencias"]};
-const SOURCE_ICON = {funcionan: "📈", serie: "📁", tema: "🏷️"};
+const SOURCE_ICON = {funcionan: "trend", serie: "folder", tema: "tag"};
 const FIELD_LABEL = {
     title: "Título", description: "Descripción", tags: "Hashtags", first_comment: "Comentario fijado",
 };
@@ -308,8 +308,9 @@ export function openComposer(options) {
     });
     save.title = "Guardar (⌘ Enter)";
     const bar = el("div", "actions-bar composer-actions");
-    bar.append(save, button("Cancelar", "btn btn-ghost", () => {
-        if (!dirty() || confirm("Hay cambios sin guardar. ¿Cerrar y descartarlos?")) closeModal();
+    const discard = () => confirmar("Hay cambios sin guardar", {text: "¿Cerrar y descartarlos?", ok: "Descartar", danger: true});
+    bar.append(save, button("Cancelar", "btn btn-ghost", async () => {
+        if (!dirty() || await discard()) closeModal();
     }), status);
     body.append(bar);
     body.addEventListener("keydown", (e) => {
@@ -320,11 +321,11 @@ export function openComposer(options) {
     });
 
     /* ---------------- tools ---------------- */
-    const fixBtn = button("🪄 Arreglar lo automático", "btn btn-ghost btn-sm", autofix);
+    const fixBtn = button("Arreglar lo automático", "btn btn-ghost btn-sm", autofix, "wand");
     fixBtn.title = "Signos «¿¡», contador «4/50», hashtags dentro del texto, repetidos, en inglés o #fyp";
     const ai = options.ai;
     const canPropose = !!(ai && ai.enabled && ai.ollama && ai.ollama.reachable);
-    const proposeBtn = button("✨ Proponer con IA", "btn btn-ghost btn-sm", propose);
+    const proposeBtn = button("Proponer con IA", "btn btn-ghost btn-sm", propose, "sparkles");
     proposeBtn.title = canPropose
         ? `Ollama (${ai.ollama.model}) escribe otra versión desde el guion o la transcripción. No se guarda nada hasta que la uses.`
         : "Necesita Ollama en marcha (Ajustes → Sistema).";
@@ -342,7 +343,9 @@ export function openComposer(options) {
                 tab.append(el("span", `tab-count ${counts.error ? "error" : "warn"}`,
                     String(counts.error + counts.warn)));
             } else if (counts) {
-                tab.append(el("span", "tab-count ok", "✓"));
+                const ok = el("span", "tab-count ok");
+                ok.append(icon("check"));
+                tab.append(ok);
             }
             tab.addEventListener("click", () => {
                 model.active = p;
@@ -602,11 +605,14 @@ export function openComposer(options) {
         }
         const total = counts.error + counts.warn + counts.tip;
         if (!total) {
-            title.append(el("span", "review-ok", "✓ Nada que corregir"));
+            const ok = el("span", "review-ok");
+            ok.append(icon("check"), " Nada que corregir");
+            title.append(ok);
         } else {
             ["error", "warn", "tip"].filter((l) => counts[l]).forEach((level) => {
-                title.append(el("span", `review-count ${level}`,
-                    `${LEVEL_ICON[level]} ${plural(counts[level], LEVEL_NAMES[level])}`));
+                const count = el("span", `review-count ${level}`);
+                count.append(icon(LEVEL_ICON[level]), ` ${plural(counts[level], LEVEL_NAMES[level])}`);
+                title.append(count);
             });
         }
         card.append(title);
@@ -615,7 +621,9 @@ export function openComposer(options) {
             const item = el("li", `review-item ${issue.level}`);
             const go = el("button", "review-go");
             go.type = "button";
-            go.append(el("span", "review-icon", LEVEL_ICON[issue.level]),
+            const mark = el("span", "review-icon");
+            mark.append(icon(LEVEL_ICON[issue.level]));
+            go.append(mark,
                 el("span", "review-field", FIELD_LABEL[issue.field] || issue.field),
                 el("span", "review-msg", issue.message));
             if (issue.fixable) go.append(el("span", "review-fixable", "arreglable"));
@@ -650,7 +658,7 @@ export function openComposer(options) {
         const platform = model.active;
         proposalBox.hidden = false;
         proposalBox.replaceChildren(el("div", "proposal-wait",
-            `✨ Escribiendo con ${ai.ollama.model}… Si la biblioteca está escribiendo textos, espera a que termine el que está en marcha (uno a la vez).`));
+            `Escribiendo con ${ai.ollama.model}… Si la biblioteca está escribiendo textos, espera a que termine el que está en marcha (uno a la vez).`));
         try {
             const t = model.texts[platform];
             model.proposal = await api("/api/text/suggest", {
@@ -676,7 +684,7 @@ export function openComposer(options) {
             "ficha": "desde la ficha .txt", "transcripción": "desde la transcripción",
             "tu texto": "mejorando tu texto"
         }[p.source] || p.source;
-        top.append(el("strong", null, `✨ Propuesta para ${LABEL[platform]}`),
+        top.append(el("strong", null, `Propuesta para ${LABEL[platform]}`),
             el("span", "muted small", `${p.model} · ${from} · ${p.seconds} s`));
         proposalBox.append(top);
         if (p.title) proposalBox.append(el("div", "proposal-title", p.title));
@@ -735,7 +743,8 @@ export function openComposer(options) {
         if (!offers.length) return;
         box.append(el("span", "muted small", "Sugerencias:"));
         offers.slice(0, 12).forEach((s) => {
-            const chip = el("button", `suggest-chip ${s.source}`, `${SOURCE_ICON[s.source] || "+"} ${s.tag}`);
+            const chip = el("button", `suggest-chip ${s.source}`);
+            chip.append(icon(SOURCE_ICON[s.source] || "plus"), ` ${s.tag}`);
             chip.type = "button";
             chip.title = `${s.detail}. Clic para añadirlo.`;
             chip.addEventListener("click", () => {
@@ -749,7 +758,7 @@ export function openComposer(options) {
     openModal(options.title, body, {
         wide: true,
         className: "is-composer",
-        beforeClose: () => !dirty() || confirm("Hay cambios sin guardar. ¿Cerrar y descartarlos?"),
+        beforeClose: () => !dirty() || discard(),
     });
     drawTabs();
     platforms.forEach((p) => {
