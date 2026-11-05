@@ -178,6 +178,35 @@ async def reply(session: Session, account: Account, comment: Comment, message: s
     return mine
 
 
+async def post(session: Session, account: Account, item: VideoItem, message: str,
+               settings: Settings) -> Comment | None:
+    """Write a top-level comment on one of the account's own published videos
+    (Community Farm uses it to @mention the people who did not fit in the
+    description), and keep it locally like a reply."""
+    ref = post_ref(item)
+    if not ref:
+        raise ZernioError("comment_no_post", "Ese vídeo todavía no tiene URL en la red.")
+    client = accounts_svc.client(account, settings)
+    new_id = await client.reply_comment(ref, account.zernio_account_id, message)
+    mine = None
+    if new_id:
+        mine = Comment(
+            video_id=item.id, account_id=account.id, external_id=new_id,
+            author_name=account.display_name or (account.username or ""),
+            author_username=account.username or "",
+            message=message, is_owner=True, answered=True,
+            created_at=datetime.now(timezone.utc),
+        )
+        session.add(mine)
+    events.record(
+        session, "comment_posted",
+        f"Comentario publicado en «{item.original_name}»: {message[:80]}",
+        level="success", account_id=account.id, video_id=item.id,
+    )
+    session.flush()
+    return mine
+
+
 async def like(session: Session, account: Account, comment: Comment,
                settings: Settings) -> None:
     """Like one comment, once. TikTok only: YouTube has no API to like a comment."""

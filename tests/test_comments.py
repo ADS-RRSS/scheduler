@@ -113,6 +113,26 @@ async def test_replying_marks_the_comment_answered_and_reaches_tiktok(client, sa
                for c in payload["comments"])
 
 
+async def test_a_comment_of_our_own_on_a_published_video(client, sample_video):
+    await reset_mock()
+    _, item, video_id = await _published_video(client, sample_video)
+    resp = await client.post(f"/api/videos/{item['id']}/comment",
+                             json={"message": "También en este episodio: @ana @luis"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["ok"] and resp.json()["comment"]["is_owner"] is True
+
+    sent = (await mock_state())["comments"][video_id]
+    assert [(c["message"], c["parentId"]) for c in sent] == [("También en este episodio: @ana @luis", None)]
+    # Kept locally as ours (and not pending), like a reply.
+    payload = (await client.get("/api/comments")).json()
+    assert payload["pending"] == 0 and payload["own"] == 1
+    assert [c["message"] for c in payload["comments"]] == ["También en este episodio: @ana @luis"]
+    # An empty message or an unknown video is refused.
+    resp = await client.post(f"/api/videos/{item['id']}/comment", json={"message": "  "})
+    assert resp.status_code == 422
+    assert (await client.post("/api/videos/999/comment", json={"message": "hola"})).status_code == 404
+
+
 async def test_an_empty_reply_is_refused(client, sample_video):
     await reset_mock()
     _, _, video_id = await _published_video(client, sample_video)

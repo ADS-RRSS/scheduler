@@ -22,6 +22,7 @@ flowchart LR
 |-----------------------------------|--------|-------------------------------------------------------------------------------------|
 | Leer los comentarios de un vídeo  | Sí     | Con sus respuestas (hasta 3 por comentario)                                         |
 | Responder a un comentario         | Sí     | Se guarda también en local para que el hilo se lea bien                             |
+| Comentar en un vídeo tuyo         | Sí     | `POST /api/videos/{id}/comment`: Community Farm menciona ahí a quien no cupo en la descripción |
 | Ocultar / volver a mostrar        | Sí     | Oculto = sólo lo ve quien lo escribió                                               |
 | Marcar respondido / sin responder | Sí     | Sólo en local: para lo respondido desde la app de TikTok o lo que no pide respuesta |
 | Filtrar por cuenta conectada      | Sí     | Cada comentario lleva su plataforma y su cuenta, en el color de su tarjeta          |

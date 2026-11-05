@@ -1439,6 +1439,24 @@ async def reply_comment(
     return comment_json(comment, get_settings().default_timezone)
 
 
+@router.post("/videos/{video_id}/comment")
+async def post_video_comment(
+    video_id: int, body: CommentReplyIn, session: Session = Depends(get_session)
+) -> dict:
+    """A top-level comment on one of our own published videos (the Farm JS
+    @mentions that did not fit in the description go here)."""
+    item = _video_or_404(session, video_id)
+    if item.status != VideoStatus.PUBLISHED:
+        raise HTTPException(409, "Ese vídeo todavía no está publicado")
+    account = _account_or_404(session, item.account_id)
+    try:
+        mine = await comments_svc.post(session, account, item, body.message, get_settings())
+    except ZernioError as exc:
+        raise _zernio_http_error(exc) from exc
+    session.commit()
+    return {"ok": True, "comment": comment_json(mine, get_settings().default_timezone) if mine else None}
+
+
 @router.post("/comments/{comment_id}/like")
 async def like_comment(comment_id: int, session: Session = Depends(get_session)) -> dict:
     """Like a comment (TikTok only). Liking one already liked does nothing."""
