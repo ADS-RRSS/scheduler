@@ -143,6 +143,24 @@ async def test_a_comment_can_be_hidden_and_shown_again(client, sample_video):
     assert (await mock_state())["comments"][video_id][0]["hidden"] is False
 
 
+async def test_a_comment_can_be_liked_once(client, sample_video):
+    await reset_mock()
+    _, _, video_id = await _published_video(client, sample_video)
+    await seed_comments(video_id, [comment_payload("c1", "me encanta")])
+    await client.post("/api/comments/refresh")
+    (comment,) = [c for c in (await client.get("/api/comments")).json()["comments"]
+                  if c["external_id"] == "c1"]
+    assert comment["liked"] is False
+
+    resp = await client.post(f"/api/comments/{comment['id']}/like")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["liked"] is True
+    assert (await mock_state())["comments"][video_id][0]["liked"] is True
+    # Liking it again neither fails nor asks Zernio twice; and a like is not an answer.
+    resp = await client.post(f"/api/comments/{comment['id']}/like")
+    assert resp.status_code == 200 and resp.json()["answered"] is False
+
+
 async def test_a_developer_app_account_is_told_to_reconnect(client, sample_video):
     """The inbox only answers on the TikTok for Business app lane."""
     await reset_mock()

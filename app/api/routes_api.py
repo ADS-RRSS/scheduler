@@ -1439,6 +1439,19 @@ async def reply_comment(
     return comment_json(comment, get_settings().default_timezone)
 
 
+@router.post("/comments/{comment_id}/like")
+async def like_comment(comment_id: int, session: Session = Depends(get_session)) -> dict:
+    """Like a comment (TikTok only). Liking one already liked does nothing."""
+    comment = _comment_or_404(session, comment_id)
+    account = _account_or_404(session, comment.account_id)
+    try:
+        await comments_svc.like(session, account, comment, get_settings())
+    except ZernioError as exc:
+        raise _zernio_http_error(exc) from exc
+    session.commit()
+    return comment_json(comment, get_settings().default_timezone)
+
+
 @router.post("/comments/{comment_id}/hide")
 async def hide_comment(
     comment_id: int, body: CommentHideIn, session: Session = Depends(get_session)

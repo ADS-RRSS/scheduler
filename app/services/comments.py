@@ -178,6 +178,30 @@ async def reply(session: Session, account: Account, comment: Comment, message: s
     return mine
 
 
+async def like(session: Session, account: Account, comment: Comment,
+               settings: Settings) -> None:
+    """Like one comment, once. TikTok only: YouTube has no API to like a comment."""
+    if comment.liked:
+        return
+    if (account.platform or "tiktok") != "tiktok":
+        raise ZernioError("comment_like_unsupported",
+                          "Sólo se puede dar me gusta a comentarios de TikTok.", http_status=400)
+    item = comment.video
+    ref = post_ref(item)
+    if not ref:
+        raise ZernioError("comment_no_post", "Ese vídeo todavía no tiene URL en TikTok.")
+    client = accounts_svc.client(account, settings)
+    await client.like_comment(ref, comment.external_id, account.zernio_account_id)
+    comment.liked = True
+    events.record(
+        session, "comment_liked",
+        f"Me gusta al comentario de @{comment.author_username or comment.author_name} "
+        f"en «{item.original_name}».",
+        account_id=account.id, video_id=item.id,
+    )
+    session.flush()
+
+
 async def set_hidden(session: Session, account: Account, comment: Comment, hidden: bool,
                      settings: Settings) -> None:
     item = comment.video

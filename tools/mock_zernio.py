@@ -450,6 +450,26 @@ async def write_comment(ref: str, request: Request):
     return JSONResponse({"status": "ok", "comment": comment}, 201)
 
 
+@app.post("/v1/inbox/comments/{ref}/{comment_id}/like")
+async def like_comment(ref: str, comment_id: str, request: Request):
+    if denied := _auth(request):
+        return denied
+    if lane := _lane_check():
+        return lane
+    entry = _post_by_ref(ref)
+    if entry is None:
+        return JSONResponse({"error": "Resource not found"}, 404)
+    body = await request.json()
+    if not body.get("accountId"):
+        return JSONResponse({"error": "invalid_request_body", "details": "accountId"}, 400)
+    for comment in COMMENTS.get(entry["video_id"], []):
+        if comment["id"] == comment_id:
+            comment["liked"] = True
+            return JSONResponse({"status": "ok", "commentId": comment_id, "liked": True,
+                                 "platform": "tiktok"})
+    return JSONResponse({"error": "Resource not found", "details": "commentId"}, 404)
+
+
 @app.post("/v1/inbox/comments/{ref}/{comment_id}/hide")
 async def hide_comment(ref: str, comment_id: str, request: Request):
     if denied := _auth(request):

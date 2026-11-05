@@ -401,6 +401,8 @@ class Comment(Base):
     hidden: Mapped[bool] = mapped_column(Boolean, default=False)
     # We have answered this one from here.
     answered: Mapped[bool] = mapped_column(Boolean, default=False)
+    # We have liked it from here (TikTok only: YouTube has no API to like a comment).
+    liked: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)

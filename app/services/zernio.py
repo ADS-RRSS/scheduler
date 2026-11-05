@@ -18,6 +18,7 @@ Endpoints used (all under https://zernio.com/api/v1, ``Authorization: Bearer``):
     GET  /analytics?platform=tiktok   views/likes/comments/shares per post
     GET  /inbox/comments/{postId}     comments on one published video
     POST /inbox/comments/{postId}     write a comment or reply to one
+    POST /inbox/comments/{postId}/{commentId}/like   like one (not on YouTube)
 
 The inbox endpoints only answer for accounts Zernio connected through TikTok's
 Business app; an older developer-app connection returns 400 with code
@@ -764,6 +765,19 @@ class ZernioClient:
         body = _json(resp)
         comment = body.get("comment") if isinstance(body.get("comment"), dict) else body
         return str(comment.get("id") or "") or None
+
+    async def like_comment(self, post_id: str, comment_id: str, account_id: str) -> None:
+        """Like a comment as the connected account. Zernio answers 400 on a
+        platform that cannot (YouTube has no API for it)."""
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(f"{self._base}/inbox/comments/{post_id}/{comment_id}/like",
+                                         headers=self._headers, json={"accountId": account_id})
+        except httpx.HTTPError as exc:
+            raise ZernioError("zernio_network", f"no se pudo contactar con Zernio: {exc}",
+                              retryable=True) from exc
+        if resp.status_code >= 400:
+            self._raise(resp, "el me gusta al comentario")
 
     async def set_comment_hidden(self, post_id: str, comment_id: str, account_id: str,
                                  hidden: bool) -> None:

@@ -282,6 +282,7 @@ def comment_json(comment: Comment, tz_name: str = "Europe/Madrid") -> dict:
         "is_owner": comment.is_owner,
         "hidden": comment.hidden,
         "answered": comment.answered,
+        "liked": comment.liked,
         "created_at": iso(comment.created_at),
         "created_local": local_str(comment.created_at, tz_name),
     }
