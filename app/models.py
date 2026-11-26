@@ -78,6 +78,9 @@ class Account(Base):
     # come from: two queues never fire back to back, and it is also the floor
     # under the random interval inside each queue.
     min_gap_minutes: Mapped[int] = mapped_column(Integer, default=15)
+    # YouTube only: the category every video of the account goes out with
+    # («27», Educación). None leaves YouTube's default, «Gente y blogs».
+    youtube_category_id: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
     # Last time «Probar conexión» confirmed the key still works for this account.
     last_checked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

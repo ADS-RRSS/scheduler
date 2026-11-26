@@ -16,6 +16,10 @@ Endpoints used (all under https://zernio.com/api/v1, ``Authorization: Bearer``):
     GET  /posts/{id}                  status; platformPostUrl arrives later
     DELETE /posts/{id}                cancel a post Zernio has not published yet
     GET  /analytics?platform=tiktok   views/likes/comments/shares per post
+    GET  /posts?accountId&source      a YouTube channel's videos: ``zernio`` (ours)
+                                      and ``external`` (uploaded by hand)
+    POST /posts/_/update-metadata     category, language, playlist and thumbnail
+                                      of any video of the channel, by its id
     GET  /inbox/comments/{postId}     comments on one published video
     POST /inbox/comments/{postId}     write a comment or reply to one
     POST /inbox/comments/{postId}/{commentId}/like   like one (not on YouTube)
@@ -51,6 +55,14 @@ READ_CHUNK = 8 * 1024 * 1024
 DEFAULT_API_BASE = "https://zernio.com/api/v1"
 DASHBOARD_URL = "https://zernio.com/dashboard"
 API_KEYS_URL = "https://zernio.com/dashboard/api-keys"
+
+# The YouTube categories worth offering, by id (YouTube's own numbering).
+YOUTUBE_CATEGORIES = {
+    "1": "Cine y animación", "10": "Música", "17": "Deportes", "20": "Videojuegos",
+    "22": "Gente y blogs", "23": "Comedia", "24": "Entretenimiento",
+    "25": "Noticias y política", "26": "Consejos y estilo", "27": "Educación",
+    "28": "Ciencia y tecnología",
+}
 
 
 class ZernioError(Exception):
@@ -192,6 +204,24 @@ class PostOptions:
     brand_content_toggle: bool = False
     brand_organic_toggle: bool = False
     is_aigc: bool = False
+    # YouTube only: the account's category («27» is Educación). Empty leaves
+    # YouTube's default, «Gente y blogs» (22).
+    youtube_category_id: str = ""
+
+
+@dataclass(frozen=True)
+class YoutubeVideo:
+    """One published video of a YouTube channel, as Zernio lists it."""
+
+    video_id: str
+    title: str
+    published_at: datetime | None
+    url: str
+    # "zernio": published by this tool; "external": uploaded by hand.
+    origin: str = "zernio"
+    post_id: str = ""
+    media_url: str = ""
+    description: str = ""
 
 
 def mime_for(path: Path) -> str:
@@ -520,6 +550,8 @@ class ZernioClient:
             if options.tags:
                 platform_data["tags"] = list(options.tags)
                 settings_dict["tags"] = list(options.tags)
+            if options.youtube_category_id:
+                platform_data["categoryId"] = options.youtube_category_id
         else:
             if options.first_comment:
                 platform_data["firstComment"] = options.first_comment[:500]
@@ -629,6 +661,111 @@ class ZernioClient:
         if resp.status_code >= 400:
             self._raise(resp, "la consulta de estado")
         return self.parse_post(_json(resp))
+
+    # ------------------------------------------------------------------ #
+    # YouTube: the channel's videos and their metadata
+    # ------------------------------------------------------------------ #
+
+    async def list_youtube_videos(
+        self, account_id: str, *, since: datetime | None = None, page_size: int = 50,
+        max_pages: int = 40,
+    ) -> list[YoutubeVideo]:
+        """Every published video of a YouTube account, oldest first.
+
+        Zernio keeps two lists: the posts it published (``source=zernio``) and
+        the ones it found on the channel (``source=external``: uploaded by hand
+        in Studio). Both come newest first, so paging stops at the first page
+        that is entirely older than ``since``.
+        """
+        found: dict[str, YoutubeVideo] = {}
+        async with httpx.AsyncClient(timeout=60) as client:
+            for source in ("zernio", "external"):
+                for page in range(1, max_pages + 1):
+                    params: dict[str, object] = {"accountId": account_id, "source": source,
+                                                 "limit": page_size, "page": page}
+                    if source == "zernio":
+                        params["status"] = "published"
+                    try:
+                        resp = await client.get(f"{self._base}/posts", headers=self._headers,
+                                                params=params)
+                    except httpx.HTTPError as exc:
+                        raise ZernioError("zernio_network",
+                                          f"no se pudo contactar con Zernio: {exc}",
+                                          retryable=True) from exc
+                    if resp.status_code >= 400:
+                        self._raise(resp, "la lista de vídeos del canal")
+                    body = _json(resp)
+                    posts = body.get("posts") or []
+                    videos = [v for v in (self.parse_youtube_post(p, account_id, source)
+                                          for p in posts) if v is not None]
+                    for video in videos:
+                        found.setdefault(video.video_id, video)
+                    pages = int((body.get("pagination") or {}).get("pages") or 0)
+                    older = since is not None and posts and all(
+                        v.published_at is not None and v.published_at <= since for v in videos)
+                    if not posts or older or (pages and page >= pages):
+                        break
+        out = [v for v in found.values()
+               if since is None or v.published_at is None or v.published_at > since]
+        far = datetime.max.replace(tzinfo=timezone.utc)
+        return sorted(out, key=lambda v: (v.published_at or far, v.video_id))
+
+    @staticmethod
+    def parse_youtube_post(post: dict, account_id: str, source: str) -> YoutubeVideo | None:
+        """The YouTube entry of one post, or None when it is not out yet."""
+        for target in post.get("platforms") or []:
+            if target.get("platform") != "youtube":
+                continue
+            acc = target.get("accountId")
+            acc_id = acc.get("_id") if isinstance(acc, dict) else acc
+            if acc_id and acc_id != account_id:
+                continue
+            video_id = str(target.get("platformPostId") or "")
+            url = target.get("platformPostUrl") or ""
+            if not video_id and url:
+                match = re.search(r"(?:v=|youtu\.be/|shorts/)([\w-]{6,})", url)
+                video_id = match.group(1) if match else ""
+            if not video_id:
+                return None
+            specific = target.get("platformSpecificData") or {}
+            content = post.get("content") or ""
+            title = (post.get("title") or specific.get("title")
+                     or content.split("\n", 1)[0]).strip()
+            media = (post.get("mediaItems") or [{}])[0]
+            return YoutubeVideo(
+                video_id=video_id,
+                title=title,
+                published_at=parse_dt(target.get("publishedAt") or post.get("publishedAt")
+                                      or post.get("scheduledFor")),
+                url=url or f"https://www.youtube.com/watch?v={video_id}",
+                origin="external" if source == "external" or post.get("origin") == "external"
+                else "zernio",
+                post_id=str(post.get("_id") or ""),
+                media_url=str(media.get("url") or ""),
+                description=content,
+            )
+        return None
+
+    async def update_youtube_metadata(self, account_id: str, video_id: str,
+                                      fields: dict) -> list[str]:
+        """Change a published video in place, wherever it was uploaded from.
+
+        Zernio's direct mode (``_`` for the post id, plus ``videoId`` and
+        ``accountId``) reaches videos it did not publish. Returns the fields
+        YouTube took.
+        """
+        body = {"platform": "youtube", "videoId": video_id, "accountId": account_id, **fields}
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                resp = await client.post(f"{self._base}/posts/_/update-metadata",
+                                         headers=self._headers, json=body)
+        except httpx.HTTPError as exc:
+            raise ZernioError("zernio_network", f"no se pudo contactar con Zernio: {exc}",
+                              retryable=True) from exc
+        if resp.status_code >= 400:
+            self._raise(resp, f"el cambio del vídeo {video_id}")
+        data = _json(resp)
+        return [str(f) for f in data.get("updatedFields") or []]
 
     # ------------------------------------------------------------------ #
     # Analytics

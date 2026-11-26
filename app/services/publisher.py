@@ -105,6 +105,8 @@ def post_options(
         brand_content_toggle=bool(schedule.brand_content_toggle),
         brand_organic_toggle=bool(schedule.brand_organic_toggle),
         is_aigc=aigc_for(item, schedule),
+        youtube_category_id=(schedule.account.youtube_category_id or "")
+        if schedule.account is not None else "",
     )
 
 

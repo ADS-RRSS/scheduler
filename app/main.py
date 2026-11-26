@@ -19,6 +19,7 @@ from .api.routes_calendar import router as calendar_router
 from .api.routes_db import router as db_router
 from .api.routes_library import router as library_router
 from .api.routes_text import router as text_router
+from .api.routes_youtube import router as youtube_router
 from .config import APP_VERSION, get_settings
 from .db import init_db, session_scope
 from .scheduler.captioner import captioner
@@ -200,6 +201,7 @@ app.include_router(admin_router)
 app.include_router(db_router)
 app.include_router(library_router)
 app.include_router(text_router)
+app.include_router(youtube_router)
 app.mount("/static", RevalidatingStaticFiles(directory=WEB_DIR / "static"), name="static")
 
 

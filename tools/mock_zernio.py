@@ -15,6 +15,7 @@ Run this server with:  ./.venv/bin/python tools/mock_zernio.py
 from __future__ import annotations
 
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
@@ -28,6 +29,10 @@ NOTIFY_CALLS: list[dict] = []
 CANCELLED: list[str] = []
 # TikTok video id -> comments, as the inbox would return them.
 COMMENTS: dict[str, list[dict]] = {}
+# YouTube videos uploaded by hand (``source=external``), seeded by the tests.
+EXTERNAL: list[dict] = []
+# Every POST /v1/posts/{ref}/update-metadata body, in order.
+METADATA_UPDATES: list[dict] = []
 
 ACCOUNTS = [
     {"_id": "acc_tiktok_1", "platform": "tiktok", "username": "@relay_user",
@@ -105,6 +110,7 @@ def mock_state() -> dict:
         "cancelled": CANCELLED,
         "comments": COMMENTS,
         "ollama_calls": OLLAMA_CALLS,
+        "metadata_updates": METADATA_UPDATES,
     }
 
 
@@ -116,6 +122,8 @@ def reset() -> dict:
     NOTIFY_CALLS.clear()
     CANCELLED.clear()
     COMMENTS.clear()
+    EXTERNAL.clear()
+    METADATA_UPDATES.clear()
     OLLAMA_CALLS.clear()
     CONFIG.clear()
     CONFIG.update({k: (list(v) if isinstance(v, list) else v) for k, v in DEFAULT_CONFIG.items()})
@@ -291,13 +299,91 @@ async def create_post(request: Request):
         "content": body.get("content", ""), "settings": settings,
         "title": body.get("title"), "tags": body.get("tags"),
         "first_comment": body.get("firstComment"),
+        "platform_data": platforms[0].get("platformSpecificData") or {},
         "media_key": key,
         "thumbnail_key": thumbnail_key,
         "scheduled_for": body.get("scheduledFor"),
         "timezone": body.get("timezone"),
         "publish_now": bool(body.get("publishNow")),
+        "published_at": None if body.get("scheduledFor")
+        else datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     return JSONResponse(_post_view(POSTS[post_id]), 201)
+
+
+@app.post("/_mock/youtube_external")
+async def seed_external(request: Request) -> dict:
+    """Videos of a YouTube channel that were uploaded by hand:
+    [{"video_id", "title", "published_at", "account_id"?}]."""
+    EXTERNAL.extend(await request.json())
+    return {"ok": True, "count": len(EXTERNAL)}
+
+
+def _listed(entry: dict) -> dict:
+    """A post as GET /v1/posts lists it."""
+    target = {"platform": entry["platform"],
+              "accountId": {"_id": entry["account_id"], "platform": entry["platform"]},
+              "status": "published", "publishedAt": entry.get("published_at"),
+              "platformPostId": entry["video_id"], "platformPostUrl": entry["url"],
+              "platformSpecificData": entry.get("platform_data") or {}}
+    return {"_id": entry["id"], "title": entry.get("title"), "content": entry.get("content", ""),
+            "status": "published", "scheduledFor": entry.get("published_at"),
+            "mediaItems": [{"type": "video", "url": f"https://media.mock.invalid/{entry['media_key']}"}],
+            "platforms": [target]}
+
+
+@app.get("/v1/posts")
+def list_posts(request: Request, accountId: str = "", source: str = "zernio",  # noqa: N803
+               status: str = "", page: int = 1, limit: int = 50):
+    if denied := _auth(request):
+        return denied
+    if source not in ("zernio", "external"):
+        return JSONResponse({"error": 'source: Invalid option: expected one of "zernio"|"external"',
+                             "code": "invalid_field_value"}, 400)
+    if source == "external":
+        rows = [{"_id": f"ext_{v['video_id']}", "origin": "external",
+                 "content": v["title"] + "\n\nDescripción", "status": "published",
+                 "scheduledFor": v["published_at"],
+                 "mediaItems": [{"type": "video", "url": "https://i.ytimg.com/x.jpg"}],
+                 "platforms": [{"platform": "youtube",
+                                "accountId": {"_id": v.get("account_id", "acc_youtube_1")},
+                                "status": "published", "publishedAt": v["published_at"],
+                                "platformPostId": v["video_id"],
+                                "platformPostUrl": f"https://www.youtube.com/watch?v={v['video_id']}"}]}
+                for v in EXTERNAL if not accountId or v.get("account_id", "acc_youtube_1") == accountId]
+    else:
+        rows = [_listed(e) for e in POSTS.values()
+                if (not accountId or e["account_id"] == accountId)
+                and (e.get("published_at") or not e.get("scheduled_for"))]
+    rows.sort(key=lambda r: r.get("scheduledFor") or "", reverse=True)
+    pages = max(1, -(-len(rows) // limit))
+    chunk = rows[(page - 1) * limit: page * limit]
+    return JSONResponse({"posts": chunk, "pagination": {"page": page, "limit": limit,
+                                                        "total": len(rows), "pages": pages}})
+
+
+@app.post("/v1/posts/{ref}/update-metadata")
+async def update_metadata(ref: str, request: Request):
+    if denied := _auth(request):
+        return denied
+    if forced := _forced_failure():
+        return forced
+    body = await request.json()
+    if body.get("platform") != "youtube":
+        return JSONResponse({"error": "platform"}, 400)
+    if ref == "_" and not (body.get("videoId") and body.get("accountId")):
+        return JSONResponse({"error": "videoId and accountId are required in direct mode"}, 400)
+    thumb = body.get("thumbnailUrl")
+    if thumb:
+        key = thumb.split("media.mock.invalid/", 1)[-1]
+        if not MEDIA.get(key, {}).get("uploaded"):
+            return JSONResponse({"error": "thumbnailUrl no se puede descargar"}, 400)
+    fields = [k for k in body if k not in ("platform", "videoId", "accountId")]
+    if not fields:
+        return JSONResponse({"error": "nothing to update"}, 400)
+    METADATA_UPDATES.append({"ref": ref, **body})
+    return JSONResponse({"success": True, "message": "ok", "videoId": body.get("videoId"),
+                         "updatedFields": fields})
 
 
 @app.delete("/v1/posts/{post_id}")

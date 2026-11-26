@@ -136,6 +136,13 @@ async function submitAccounts() {
    redrawn until it is saved or discarded (the 5-second refresh used to wipe
    what was being typed). What was drawn last, so an unchanged poll redraws nothing. */
 let accountsDirty = false;
+/* Same ids as YOUTUBE_CATEGORIES in app/services/zernio.py. */
+const YOUTUBE_CATEGORIES = {
+    "27": "Educación", "28": "Ciencia y tecnología", "25": "Noticias y política",
+    "24": "Entretenimiento", "23": "Comedia", "26": "Consejos y estilo",
+    "1": "Cine y animación", "10": "Música", "17": "Deportes", "20": "Videojuegos",
+    "22": "Gente y blogs",
+};
 let accountsDrawn = "";
 
 /** The page was left: what was typed and not saved is dropped. */
@@ -182,6 +189,26 @@ function limitsEditor(entry) {
         max.disabled = noMax.checked;
     });
     fields.append(noMaxLabel, maxLabel, gapLabel);
+
+    /* YouTube: the category every video goes out with. The language has no
+       place at upload time in Zernio; Tunnel's YouTube optimizer sets it. */
+    const isYoutube = account.platform === "youtube";
+    const category = el("select");
+    if (isYoutube) {
+        const none = el("option", "", "La de YouTube (Gente y blogs)");
+        none.value = "";
+        category.append(none);
+        for (const [id, name] of Object.entries(YOUTUBE_CATEGORIES)) {
+            const opt = el("option", "", name);
+            opt.value = id;
+            category.append(opt);
+        }
+        category.value = account.youtube_category_id || "";
+        const categoryLabel = el("label");
+        categoryLabel.append(document.createTextNode("Categoría de YouTube "), category);
+        categoryLabel.title = "Con la que sale cada vídeo de esta cuenta";
+        fields.append(categoryLabel);
+    }
     box.append(fields);
 
     const status = el("span", "muted small");
@@ -195,7 +222,7 @@ function limitsEditor(entry) {
         status.textContent = "Cambios sin guardar";
         discard.hidden = false;
     };
-    [noMax, max, gap].forEach((node) => {
+    [noMax, max, gap, category].forEach((node) => {
         node.addEventListener("input", touched);
         node.addEventListener("change", touched);
     });
@@ -207,6 +234,7 @@ function limitsEditor(entry) {
                 body: JSON.stringify({
                     max_per_day: noMax.checked ? null : Number(max.value),
                     min_gap_minutes: Number(gap.value),
+                    ...(isYoutube ? {youtube_category_id: category.value} : {}),
                 }),
             });
             toast(`Límites guardados: ${accountLimits({

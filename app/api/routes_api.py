@@ -43,9 +43,10 @@ from ..services import comments as comments_svc
 from ..services import delegation as delegation_svc
 from ..services import hashtags as hashtags_svc
 from ..services import captions, events, library, media, notify, publisher, queue, scheduling
-from ..services.zernio import ZernioClient, ZernioError
+from ..services.zernio import YOUTUBE_CATEGORIES, ZernioClient, ZernioError
 from .serializers import (
     account_json,
+    account_label,
     comment_json,
     event_json,
     iso,
@@ -471,6 +472,16 @@ def patch_account(
             and body.min_gap_minutes != account.min_gap_minutes:
         account.min_gap_minutes = body.min_gap_minutes
         limits_changed = True
+    if "youtube_category_id" in sent and body.youtube_category_id != account.youtube_category_id:
+        account.youtube_category_id = body.youtube_category_id
+        events.record(
+            session, "account_youtube_category",
+            f"Categoría de YouTube de {account_label(account)}: "
+            + (YOUTUBE_CATEGORIES.get(body.youtube_category_id, body.youtube_category_id)
+               if body.youtube_category_id else "la de YouTube por defecto (Gente y blogs)")
+            + ".",
+            account_id=account.id,
+        )
     if limits_changed:
         session.flush()
         scheduling.replan_account(session, account)

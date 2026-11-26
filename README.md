@@ -464,6 +464,13 @@ tu nombre con la autorización que tú le des en TikTok. Gratis hasta dos cuenta
 pago por cuenta a partir de ahí. Puedes revocar la clave y la conexión con TikTok
 en cualquier momento. Detalles en [docs/ZERNIO.md](docs/ZERNIO.md).
 
+**¿Y la categoría y el idioma en YouTube?** En **Cuentas**, cada cuenta de YouTube tiene su **Categoría de
+YouTube** (p. ej. Educación), que se manda con cada vídeo. El idioma no lo acepta Zernio al publicar: lo pone,
+junto con la lista y la miniatura de los vídeos largos, el optimizador de YouTube de Tunnel, que usa
+`GET /api/youtube/{cuenta}/videos` y `POST /api/youtube/{cuenta}/videos/{id}/metadata` (con `dry_run`). Sirve
+también para los vídeos subidos a mano en Studio: Zernio los cambia por su id de YouTube. Qué categoría lleva cada
+cuenta y cómo ponerlo en marcha en otro Mac: `Tunnel/README.md` → «Optimizador de YouTube».
+
 **¿Y si pierdo la API key?** **Cuentas → Mostrar clave** te la enseña (queda
 registrado en Actividad). Si la revocaste en Zernio, **Sustituir clave**.
 

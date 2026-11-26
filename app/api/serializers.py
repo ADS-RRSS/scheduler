@@ -67,6 +67,7 @@ def account_json(account: Account) -> dict:
         # Ceiling shared by every queue of the account.
         "max_per_day": account.max_per_day,
         "min_gap_minutes": account.min_gap_minutes,
+        "youtube_category_id": account.youtube_category_id,
         "queue_count": len(account.schedules),
         "created_at": iso(account.created_at),
         "created_local": local_str(account.created_at, tz),

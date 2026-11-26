@@ -335,6 +335,30 @@ class AccountPatch(BaseModel):
     max_per_day: int | None = Field(default=None, ge=0, le=200)
     # The one separation setting: it holds inside every queue and between them.
     min_gap_minutes: int | None = Field(default=None, ge=0, le=24 * 60)
+    # YouTube's category for every video of the account; "" or null clears it.
+    youtube_category_id: str | None = Field(default=None, max_length=8)
+
+    @field_validator("youtube_category_id")
+    @classmethod
+    def _check_category(cls, v: str | None):
+        v = (v or "").strip()
+        if v and not v.isdigit():
+            raise ValueError("la categoría de YouTube es un número (27 = Educación)")
+        return v or None
+
+
+class YoutubeMetadataIn(BaseModel):
+    """What to change on one published YouTube video; a field left out is not touched."""
+
+    category_id: str | None = Field(default=None, max_length=8)
+    # BCP-47, as YouTube wants it: «es-ES».
+    default_language: str | None = Field(default=None, max_length=16)
+    default_audio_language: str | None = Field(default=None, max_length=16)
+    playlist_id: str | None = Field(default=None, max_length=64)
+    # A JPEG or PNG on this Mac; it is uploaded to Zernio and set as the thumbnail.
+    thumbnail_path: str | None = Field(default=None, max_length=1024)
+    # True answers with what would be sent, and sends nothing.
+    dry_run: bool = False
 
 
 # --------------------------------------------------------------------------- #
