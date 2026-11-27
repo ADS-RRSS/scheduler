@@ -57,7 +57,3 @@ def decrypt(ciphertext: str | None) -> str | None:
         return None
 
 
-def reset_cache() -> None:
-    """Testing hook."""
-    global _fernet
-    _fernet = None

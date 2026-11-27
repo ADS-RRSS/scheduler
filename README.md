@@ -34,6 +34,7 @@ YouTube ya son dos).
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Cuando algo falla                                                            |
 | [docs/SECURITY.md](docs/SECURITY.md)               | Dónde se guardan las claves y cómo                                           |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)       | Estructura del código                                                        |
+| [docs/API.md](docs/API.md)                         | La API local, ruta a ruta, y cuáles usan los demás proyectos                 |
 | [docs/ROADMAP.md](docs/ROADMAP.md)                 | Mejoras hechas y pendientes, con su motivo y su puntuación                   |
 | [CHANGELOG.md](CHANGELOG.md)                       | Qué ha cambiado                                                              |
 
@@ -466,7 +467,7 @@ pago por cuenta a partir de ahí. Puedes revocar la clave y la conexión con Tik
 en cualquier momento. Detalles en [docs/ZERNIO.md](docs/ZERNIO.md).
 
 **¿Y la categoría y el idioma en YouTube?** En **Cuentas**, cada cuenta de YouTube tiene su **Categoría de
-YouTube** (p. ej. Educación), que se manda con cada vídeo. El idioma no lo acepta Zernio al publicar: lo pone,
+YouTube** (p. ej. Educación; la lista, `GET /api/youtube/categories`), que se manda con cada vídeo. El idioma no lo acepta Zernio al publicar: lo pone,
 junto con la lista y la miniatura de los vídeos largos, el optimizador de YouTube de Tunnel, que usa
 `GET /api/youtube/{cuenta}/videos` y `POST /api/youtube/{cuenta}/videos/{id}/metadata` (con `dry_run`). Sirve
 también para los vídeos subidos a mano en Studio: Zernio los cambia por su id de YouTube. Qué categoría lleva cada

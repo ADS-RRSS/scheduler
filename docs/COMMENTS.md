@@ -26,7 +26,7 @@ flowchart LR
 | Ocultar / volver a mostrar        | Sí     | Oculto = sólo lo ve quien lo escribió                                               |
 | Marcar respondido / sin responder | Sí     | Sólo en local: para lo respondido desde la app de TikTok o lo que no pide respuesta |
 | Filtrar por cuenta conectada      | Sí     | Cada comentario lleva su plataforma y su cuenta, en el color de su tarjeta          |
-| Dar «me gusta» a un comentario    | **No** | Zernio no lo soporta en TikTok, sólo en otras redes                                 |
+| Dar «me gusta» a un comentario    | Sí     | Sólo TikTok (YouTube no tiene API): `POST /api/comments/{id}/like`; queda en la Actividad |
 | Borrar comentarios de otros       | **No** | TikTok sólo deja borrar los tuyos; para el resto, ocultar                           |
 | Mensajes directos (DM)            | **No** | Ver abajo                                                                           |
 

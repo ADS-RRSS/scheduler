@@ -448,12 +448,6 @@ def _check_comment(report: Report, texts: Texts, platform: str) -> None:
 # The fixes that need no model
 # --------------------------------------------------------------------------- #
 
-def _fix_tag(tag: str) -> str | None:
-    clean = hashtags.normalize(tag)
-    if clean is None:
-        return None
-    return _english_tag(clean) or clean
-
 
 def autofix(texts: Texts, platform: str = "tiktok", ctx: Context | None = None
             ) -> tuple[Texts, list[str]]:

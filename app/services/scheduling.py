@@ -440,16 +440,6 @@ def create_schedule(
     return schedule
 
 
-def default_for(session: Session, account: Account) -> Schedule:
-    """The account's first queue, creating one if it somehow has none."""
-    existing = default_schedule(account)
-    if existing is not None:
-        return existing
-    schedule = create_schedule(session, account, name=DEFAULT_NAME)
-    session.refresh(account)
-    return schedule
-
-
 def blockers(session: Session, schedule: Schedule) -> list[str]:
     """Reasons this queue cannot be deleted right now."""
     problems: list[str] = []
