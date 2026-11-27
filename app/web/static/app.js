@@ -60,7 +60,7 @@ const BRANDED_CONTENT_URL = "https://www.tiktok.com/legal/page/global/bc-policy/
 const ACCOUNT_PAGES = new Set(["cola", "programacion"]);
 const PAGES = ["resumen", "biblioteca", "cola", "programacion", "calendario", "analiticas",
     "comentarios", "actividad", "cuentas", "db", "ajustes"];
-const PLATFORM_LABEL = {tiktok: "TikTok", youtube: "YouTube"};
+const PLATFORM_LABEL = {tiktok: "TikTok", youtube: "YouTube", facebook: "Facebook"};
 const WEEKDAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 
 /* ------------------------------------------------------------------ */
@@ -833,6 +833,9 @@ function renderDisclosure() {
 
     if (platform === "youtube") {
         consent.append("Al publicar aceptas las condiciones de servicio de YouTube.");
+    } else if (platform === "facebook") {
+        consent.append("Al publicar aceptas las condiciones de Facebook para páginas. "
+            + "Hasta 60 s y vertical sale como Reel; si no, como vídeo de la página.");
     } else {
         if (branded) {
             consent.append("Al publicar aceptas la ", link("Branded Content Policy", BRANDED_CONTENT_URL),

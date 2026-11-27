@@ -224,6 +224,11 @@ class LibraryItem(Base):
     youtube_description: Mapped[str] = mapped_column(Text, default="", server_default="")
     youtube_tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
     youtube_first_comment: Mapped[str] = mapped_column(Text, default="", server_default="")
+    # Facebook (a Page, through Zernio): the title is a Reel's only; hashtags go in the text.
+    facebook_title: Mapped[str] = mapped_column(Text, default="", server_default="")
+    facebook_description: Mapped[str] = mapped_column(Text, default="", server_default="")
+    facebook_tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    facebook_first_comment: Mapped[str] = mapped_column(Text, default="", server_default="")
 
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)

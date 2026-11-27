@@ -28,7 +28,7 @@ def calendar_week(
 ) -> dict:
     """``days`` days from ``start`` (the Monday of this week by default).
 
-    ``platform`` (tiktok, youtube) and ``account_id`` (repeatable) narrow the
+    ``platform`` (tiktok, youtube, facebook) and ``account_id`` (repeatable) narrow the
     accounts; ``projected=false`` leaves out what is only simulated.
     """
     settings = get_settings()
@@ -37,8 +37,8 @@ def calendar_week(
         first = date.fromisoformat(start) if start else calendar.week_start(datetime.now(tz).date())
     except ValueError as exc:
         raise HTTPException(400, "start debe ser una fecha AAAA-MM-DD.") from exc
-    if platform and platform not in ("tiktok", "youtube"):
-        raise HTTPException(400, "platform debe ser tiktok o youtube.")
+    if platform and platform not in ("tiktok", "youtube", "facebook"):
+        raise HTTPException(400, "platform debe ser tiktok, youtube o facebook.")
     everyone = accounts_svc.list_all(session)
     chosen = [a for a in everyone
               if (not platform or (a.platform or "tiktok") == platform)

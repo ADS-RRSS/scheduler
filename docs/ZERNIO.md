@@ -144,6 +144,27 @@ las analíticas y el buzón de la anterior.
 
 ---
 
+## Páginas de Facebook
+
+Se conectan igual: en Zernio, **Connect account → Facebook** y eliges la
+**página** (los perfiles personales no publican por API; hay que ser admin o
+editor de la página). En el Scheduler aparece con «Buscar mis cuentas». Cada
+página es una cuenta de Zernio a efectos de precio.
+
+| | Cómo sale |
+|---|---|
+| Vertical y de 3 a 60 s | **Reel**, con el título de Facebook (`contentType: "reel"`, `title`) |
+| Cualquier otro | Vídeo de la página (feed): hasta 240 min y 4 GB; sin título |
+| Texto | La descripción con sus hashtags; Facebook no tiene lista de etiquetas |
+| Comentario fijado | `firstComment`, se publica justo después |
+| Portada | No: Zernio no la admite para Facebook, que elige el fotograma |
+
+Límites: 30 Reels por API cada 24 h por página (Meta; el siguiente da 429, que
+se reintenta solo) y 250 publicaciones al día (Zernio). Las sesiones de
+Facebook caducan a menudo: si Zernio dice que la cuenta está desconectada,
+reconecta la página en su panel. Directos: Zernio no los hace (ver
+`../../PLAN-facebook.md`, parte B).
+
 ## Lo que tienes que saber
 
 **Público y directo, siempre.** Es lo único que publica el carril de Business, y
@@ -175,9 +196,13 @@ se usan analíticas y comentarios— también los números de tus vídeos y los
 comentarios que recibes. Es un tercero: lee su política de privacidad antes de
 darle acceso a tu cuenta. Su almacenamiento temporal guarda el archivo unos 7 días.
 
-**Coste.** Las dos primeras cuentas conectadas son gratis para siempre (una
-cuenta de TikTok = una cuenta). La tercera y siguientes, 6 $/cuenta/mes. Cada
-cuenta incluye publicación, analíticas, buzón y API, sin extras.
+**Coste.** Las dos primeras cuentas conectadas son gratis para siempre. Una
+cuenta es un perfil de TikTok, un canal de YouTube o una página de Facebook. De
+la 3.ª a la 10.ª, 6 $/cuenta/mes; de la 11.ª a la 100.ª, 3 $ (comprobado en
+noviembre de 2026). Cada cuenta incluye publicación, analíticas, buzón y API,
+sin extras. El límite es por cuenta de Zernio (por API key): en el Scheduler
+cada cuenta lleva su clave, así que una marca puede tener su propia cuenta de
+Zernio con sus dos gratis.
 
 ---
 
@@ -212,7 +237,7 @@ minutos). Un `401`, un `402` o un `400` no se reintentan: no se arreglan solos.
 ## Fuentes consultadas
 
 - Zernio · [Pricing](https://zernio.com/pricing) · [API docs](https://docs.zernio.com/) ·
-  [TikTok](https://docs.zernio.com/platforms/tiktok) ·
+  [TikTok](https://docs.zernio.com/platforms/tiktok) · [Facebook](https://docs.zernio.com/platforms/facebook) ·
   [Media uploads](https://docs.zernio.com/guides/media-uploads) ·
   [Rate limits](https://docs.zernio.com/guides/rate-limits) ·
   [Analytics](https://docs.zernio.com/analytics/get-analytics) ·

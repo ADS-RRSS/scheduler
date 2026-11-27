@@ -28,7 +28,7 @@ from zoneinfo import ZoneInfo
 
 from . import autocaption, captions, hashtags
 
-PLATFORMS = ("tiktok", "youtube")
+PLATFORMS = ("tiktok", "youtube", "facebook")
 
 # The first line is what shows before «más»; the generator writes it in 40-100.
 FOLD_CHARS = 100
@@ -37,6 +37,10 @@ TITLE_MAX_CHARS = autocaption.TITLE_MAX_CHARS
 TITLE_MIN_CHARS = 20
 TIKTOK_CAPTION_MAX = captions.MAX_CAPTION_CHARS
 YOUTUBE_DESCRIPTION_MAX = 5000
+# What this tool sends as a Facebook post's text (zernio.py cuts it there too).
+FACEBOOK_TEXT_MAX = 5000
+# More hashtags than this read as spam on Facebook.
+FACEBOOK_MAX_TAGS = 5
 # YouTube's ceiling for the whole tag list, commas included.
 YOUTUBE_TAGS_MAX_CHARS = 500
 # TikTok cuts comments (and so the pinned one) at 150 characters.
@@ -248,7 +252,7 @@ def check(texts: Texts, platform: str = "tiktok", ctx: Context | None = None) ->
         "title_max": TITLE_MAX_CHARS,
         "description_chars": len(texts.description.strip()),
         "caption_chars": len(preview["caption"]),
-        "caption_max": TIKTOK_CAPTION_MAX if platform == "tiktok" else YOUTUBE_DESCRIPTION_MAX,
+        "caption_max": caption_max(platform),
         "hook_chars": len(hook),
         "fold_chars": FOLD_CHARS,
         "tags": len(preview["tags"]),
@@ -263,6 +267,11 @@ def check(texts: Texts, platform: str = "tiktok", ctx: Context | None = None) ->
         report.stats["youtube_tags_chars"] = len(",".join(plain))
         report.stats["youtube_tags_max"] = YOUTUBE_TAGS_MAX_CHARS
     return report
+
+
+def caption_max(platform: str) -> int:
+    """The longest text, hashtags included, each platform takes."""
+    return {"tiktok": TIKTOK_CAPTION_MAX, "facebook": FACEBOOK_TEXT_MAX}.get(platform, YOUTUBE_DESCRIPTION_MAX)
 
 
 def _check_title(report: Report, texts: Texts, platform: str) -> None:
@@ -296,10 +305,11 @@ def _check_description(report: Report, texts: Texts, platform: str, ctx: Context
     text = texts.description
     body = _INLINE_TAG_RE.sub("", text)
     if not body.strip():
-        report.add("warn" if platform == "tiktok" else "tip", "description", "desc_empty",
-                   "Sin descripción: sólo saldrán los hashtags, y la descripción es lo "
-                   "que TikTok lee para el buscador." if platform == "tiktok" else
-                   "Sin descripción: YouTube la enseña bajo el título y la usa para buscar.")
+        report.add("tip" if platform == "youtube" else "warn", "description", "desc_empty", {
+            "tiktok": "Sin descripción: sólo saldrán los hashtags, y la descripción es lo "
+                      "que TikTok lee para el buscador.",
+            "facebook": "Sin descripción: en Facebook el texto es lo que se lee antes de darle al vídeo.",
+        }.get(platform, "Sin descripción: YouTube la enseña bajo el título y la usa para buscar."))
         return
     foreign = _foreign(text)
     if foreign:
@@ -362,7 +372,7 @@ def _check_description(report: Report, texts: Texts, platform: str, ctx: Context
         report.add("warn", "description", "inline_tag_duplicate",
                    f"{' '.join(repeated)} {_plural(len(repeated), 'está', 'están')} en el texto y "
                    "en la lista: saldría dos veces.", fixable=True)
-    limit = TIKTOK_CAPTION_MAX if platform == "tiktok" else YOUTUBE_DESCRIPTION_MAX
+    limit = caption_max(platform)
     if len(preview["caption"]) > limit:
         report.add("error", "description", "caption_long",
                    f"Con los hashtags son {len(preview['caption'])} caracteres y el máximo es "
@@ -408,6 +418,10 @@ def _check_tags(report: Report, texts: Texts, platform: str, ctx: Context, previ
         report.add("tip", "tags", "tags_few",
                    f"{len(topic)} {_plural(len(topic), 'hashtag', 'hashtags')} del tema: entre 3 y 5 "
                    "concretos de este vídeo ayudan a que lo encuentre quien busca eso.")
+    if platform == "facebook" and len(preview["tags"]) > FACEBOOK_MAX_TAGS:
+        report.add("warn", "tags", "facebook_tags_many",
+                   f"{len(preview['tags'])} hashtags: en Facebook, más de {FACEBOOK_MAX_TAGS} parecen spam. "
+                   "Deja los del tema.")
     if platform == "youtube":
         chars = len(",".join(preview.get("youtube_tags", [])))
         if chars > YOUTUBE_TAGS_MAX_CHARS:

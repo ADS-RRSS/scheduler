@@ -176,10 +176,11 @@ def library_items(
     total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     ordered = stmt.order_by(LibraryItem.folder, LibraryItem.original_name)
     fixed = tuple(captions.stored_hashtags(session))
+    reviewed = library.platforms_in_use(session)
     if issues:
         # The review is not a column: every candidate is checked, then cut.
         items = [i for i in session.scalars(ordered)
-                 if (r := library.review(i, fixed)) and (r["errors"] or r["warnings"])]
+                 if (r := library.review(i, fixed, reviewed)) and (r["errors"] or r["warnings"])]
         total = len(items)
         items = items[:max(1, min(limit, MAX_LIST))]
     else:
@@ -188,7 +189,7 @@ def library_items(
     rows = []
     for item in items:
         row = library_json(item, usage.get(item.id, []), _tz())
-        row["review"] = library.review(item, fixed)
+        row["review"] = library.review(item, fixed, reviewed)
         if account_id is not None:
             row["in_account"] = any(v["account_id"] == account_id for v in row["queued"])
         rows.append(row)

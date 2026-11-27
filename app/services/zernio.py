@@ -207,6 +207,9 @@ class PostOptions:
     # YouTube only: the account's category («27» is Educación). Empty leaves
     # YouTube's default, «Gente y blogs» (22).
     youtube_category_id: str = ""
+    # Facebook only: a Reel (vertical, 3–60 s, with its own title) or, when
+    # False, a video in the Page's feed.
+    facebook_reel: bool = False
 
 
 @dataclass(frozen=True)
@@ -538,6 +541,8 @@ class ZernioClient:
         alongside because Zernio reads it to interpret ``scheduledFor``; the
         timestamp itself is always explicit UTC, so the two can never disagree.
         """
+        if platform == "facebook":
+            return self._facebook_post(account_id, media_url, options, scheduled_for, timezone_name)
         settings_dict = self.tiktok_settings(options)
         platform_data: dict = {f"{platform}Settings": settings_dict}
         if platform == "youtube":
@@ -583,6 +588,10 @@ class ZernioClient:
             body["firstComment"] = options.first_comment[:500]
         if options.tags:
             body["tags"] = list(options.tags)
+        return self._when(body, scheduled_for, timezone_name)
+
+    @staticmethod
+    def _when(body: dict, scheduled_for: datetime | None, timezone_name: str) -> dict:
         if scheduled_for is None:
             body["publishNow"] = True
         else:
@@ -594,12 +603,40 @@ class ZernioClient:
                 body["timezone"] = timezone_name
         return body
 
+    def _facebook_post(
+        self, account_id: str, media_url: str, options: PostOptions,
+        scheduled_for: datetime | None, timezone_name: str,
+    ) -> dict:
+        """A Facebook Page post: a Reel, or a video in the feed.
+
+        None of TikTok's settings travel (Zernio's ``facebookSettings`` is for
+        drafts and carousels). Facebook has no tag list, so the hashtags are
+        the ones already in the text; the title belongs to Reels only; and
+        Zernio takes no cover for Facebook, which picks its own frame.
+        """
+        data: dict = {}
+        if options.facebook_reel:
+            data["contentType"] = "reel"
+            if options.title:
+                data["title"] = options.title
+        if options.first_comment:
+            data["firstComment"] = options.first_comment[:500]
+        body = {
+            "content": options.caption[:5000],
+            "mediaItems": [{"type": "video", "url": media_url}],
+            "platforms": [{"platform": "facebook", "accountId": account_id,
+                           "platformSpecificData": data}],
+        }
+        return self._when(body, scheduled_for, timezone_name)
+
     async def publish(
         self, account_id: str, path: Path, options: PostOptions,
         scheduled_for: datetime | None = None, timezone_name: str = "",
         platform: str = "tiktok", thumbnail: Path | None = None,
     ) -> PostResult:
         """Upload the video (and its cover, for YouTube and TikTok) and create the post.
+
+        Facebook takes no cover through Zernio, so none is uploaded for it.
 
         A cover that cannot be uploaded does not hold the video back: it goes
         out with YouTube's automatic thumbnail or TikTok's first frame, and the

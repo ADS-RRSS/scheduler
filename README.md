@@ -3,11 +3,12 @@
 > Antes se llamaba **TikTok Scheduler**. En el espacio `_RRSS` publica lo que genera
 > [ContentBuilder](https://github.com/ADS-RRSS/content-builder), con su ficha `.txt`.
 
-Programador local de subidas a TikTok (y YouTube). Subes tus vídeos una vez a la
+Programador local de subidas a TikTok (y YouTube y páginas de Facebook). Subes tus vídeos una vez a la
 biblioteca, los pasas a una cola, defines unas reglas (cada cuánto, cuántos al
 día, en qué franjas) y la herramienta los publica sola, **en público y sin app
 propia de TikTok**, a través de [Zernio](https://zernio.com). Todo corre en tu ordenador; la única cuenta
-externa es la de Zernio, gratis hasta dos cuentas de TikTok.
+externa es la de Zernio, gratis hasta dos cuentas (de cualquier red: un TikTok y un
+YouTube ya son dos).
 
 ```
  tus vídeos ──▶ biblioteca ──▶ cola + reglas ──▶ Zernio ──▶ TikTok / YouTube

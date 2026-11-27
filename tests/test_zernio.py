@@ -42,15 +42,15 @@ async def test_key_lists_tiktok_and_youtube_accounts_and_marks_connected_ones(cl
     resp = await client.post("/api/zernio/accounts", json={"api_key": ZERNIO_KEY})
     assert resp.status_code == 200, resp.text
     accounts = resp.json()["accounts"]
-    # TikTok and YouTube; the Instagram account of the same key is left out.
-    assert [a["id"] for a in accounts] == [ACCOUNT_1, ACCOUNT_2, "acc_youtube_1"]
-    assert [a["platform"] for a in accounts] == ["tiktok", "tiktok", "youtube"]
+    # TikTok, YouTube and Facebook; the Instagram account of the same key is left out.
+    assert [a["id"] for a in accounts] == [ACCOUNT_1, ACCOUNT_2, "acc_youtube_1", "acc_facebook_1"]
+    assert [a["platform"] for a in accounts] == ["tiktok", "tiktok", "youtube", "facebook"]
     assert all(a["already_connected"] is False for a in accounts)
 
     await make_account(client, ACCOUNT_1)
     accounts = (await client.post("/api/zernio/accounts", json={"api_key": ZERNIO_KEY})).json()["accounts"]
     assert {a["id"]: a["already_connected"] for a in accounts} == {
-        ACCOUNT_1: True, ACCOUNT_2: False, "acc_youtube_1": False}
+        ACCOUNT_1: True, ACCOUNT_2: False, "acc_youtube_1": False, "acc_facebook_1": False}
 
 
 async def test_wrong_key_is_reported_clearly(client):

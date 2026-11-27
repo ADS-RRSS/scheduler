@@ -407,7 +407,7 @@ async def zernio_accounts(body: ZernioKeyIn, session: Session = Depends(get_sess
         raise _zernio_http_error(exc) from exc
     except Exception as exc:  # noqa: BLE001 - shown to the user
         raise HTTPException(502, f"No se pudo contactar con Zernio: {exc}") from exc
-    found = [a for a in found if a.get("platform") in ("tiktok", "youtube")]
+    found = [a for a in found if a.get("platform") in ("tiktok", "youtube", "facebook")]
     connected = {a.zernio_account_id for a in accounts_svc.list_all(session)}
     for acc in found:
         acc["already_connected"] = acc["id"] in connected

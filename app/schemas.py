@@ -99,12 +99,13 @@ class LibraryTextsIn(BaseModel):
 class LibraryPatch(BaseModel):
     tiktok: LibraryTextsIn | None = None
     youtube: LibraryTextsIn | None = None
+    facebook: LibraryTextsIn | None = None
 
 
 class TextCheckIn(BaseModel):
     """The four texts of one platform as the editor holds them, not yet saved."""
 
-    platform: str = Field(default="tiktok", pattern="^(tiktok|youtube)$")
+    platform: str = Field(default="tiktok", pattern="^(tiktok|youtube|facebook)$")
     title: str = Field(default="", max_length=1000)
     description: str = Field(default="", max_length=20_000)
     tags: list[str] = Field(default_factory=list, max_length=100)
@@ -117,7 +118,7 @@ class TextCheckIn(BaseModel):
 class TextSuggestIn(BaseModel):
     """«Proponer con IA»: a fresh draft from the video's script or transcript."""
 
-    platform: str = Field(default="tiktok", pattern="^(tiktok|youtube)$")
+    platform: str = Field(default="tiktok", pattern="^(tiktok|youtube|facebook)$")
     library_id: int | None = None
     video_id: int | None = None
     # What the editor holds: the model works from it when the video has no
@@ -132,7 +133,7 @@ class LibraryTagsIn(BaseModel):
     ids: list[int] = Field(default_factory=list, max_length=2000)
     # Every video of a folder, instead of (or on top of) the ids.
     folder: str | None = Field(default=None, max_length=160)
-    platforms: list[str] = Field(default_factory=lambda: ["tiktok", "youtube"], min_length=1)
+    platforms: list[str] = Field(default_factory=lambda: ["tiktok", "youtube", "facebook"], min_length=1)
     add: list[str] = Field(default_factory=list, max_length=10)
     remove: list[str] = Field(default_factory=list, max_length=30)
     # Where the added ones go: first counts for sure (TikTok counts five).
@@ -141,7 +142,7 @@ class LibraryTagsIn(BaseModel):
     @field_validator("platforms")
     @classmethod
     def _check_platforms(cls, v: list[str]):
-        bad = [p for p in v if p not in ("tiktok", "youtube")]
+        bad = [p for p in v if p not in ("tiktok", "youtube", "facebook")]
         if bad:
             raise ValueError(f"plataformas desconocidas: {', '.join(bad)}")
         return list(dict.fromkeys(v))

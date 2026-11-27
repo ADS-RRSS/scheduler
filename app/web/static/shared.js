@@ -24,7 +24,7 @@ export const state = {
     queueSelected: new Set(),
     /* {id, until, scrolled}: the video to bring into view in the queue list. */
     queueFocus: null,
-    /* "" (every platform), "tiktok" or "youtube": Resumen and Calendario share it. */
+    /* "" (every platform), "tiktok", "youtube" or "facebook": Resumen and Calendario share it. */
     platform: "",
     /* Callbacks registered by app.js so admin.js can trigger a data reload. */
     refresh: async () => {
@@ -409,10 +409,10 @@ export function everyQueue() {
 
 /* ------------------------------------------------------------------ */
 
-export const PLATFORM_NAMES = {tiktok: "TikTok", youtube: "YouTube"};
+export const PLATFORM_NAMES = {tiktok: "TikTok", youtube: "YouTube", facebook: "Facebook"};
 
 export function platformOf(account) {
-    return account?.platform === "youtube" ? "youtube" : "tiktok";
+    return PLATFORM_NAMES[account?.platform] ? account.platform : "tiktok";
 }
 
 export function setPlatform(value) {
@@ -431,7 +431,7 @@ export function accountsOfPlatform(entries = accounts()) {
 /** «Todas · 4», «TikTok · 2», «YouTube · 2»; hidden when there is only one platform. */
 export function drawPlatformChips(box, onChange) {
     const all = accounts();
-    const counts = {tiktok: 0, youtube: 0};
+    const counts = {tiktok: 0, youtube: 0, facebook: 0};
     all.forEach((e) => {
         counts[platformOf(e.account)] += 1;
     });

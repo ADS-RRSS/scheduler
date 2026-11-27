@@ -12,7 +12,7 @@
     --ok: #157a42; --ok-fg: #ffffff; --warn: #9a5f06; --bad: #c23636; --bad-fg: #ffffff;
     --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 4px 14px rgba(0, 0, 0, .04);
     /* Plataformas: ni rojo (que es «fallido») ni azul (que es el acento). */
-    --tiktok: #1c1c1e; --youtube: #b4236b;
+    --tiktok: #1c1c1e; --youtube: #b4236b; --facebook: #1b5fc9;
     /* Escala de tipo. */
     --fs-xs: 11px; --fs-sm: 12px; --fs-md: 13px; --fs-base: 14px; --fs-lg: 15px; --fs-xl: 18px; --fs-2xl: 22px;
     /* Escala de espacio, en múltiplos de 4. */
@@ -41,7 +41,7 @@
         --line: #2d2d31; --line-strong: #3d3d43;
         --acc: #5b8cff; --ok: #2fb36a; --ok-fg: #08200f; --warn: #d99a2b; --bad: #ef5a5a; --bad-fg: #2a0a0a;
         --shadow: 0 1px 2px rgba(0, 0, 0, .3);
-        --tiktok: #f1f1f3; --youtube: #f06bb0;
+        --tiktok: #f1f1f3; --youtube: #f06bb0; --facebook: #6ea8ff;
     }
 }
 
@@ -3340,6 +3340,11 @@ button.folder-label.is-active:hover {
 .lib-plat.youtube {
     color: var(--youtube);
     background: color-mix(in srgb, var(--youtube) 12%, transparent);
+}
+
+.lib-plat.facebook {
+    color: var(--facebook);
+    background: color-mix(in srgb, var(--facebook) 12%, transparent);
 }
 
 .lib-plat.tiktok {

@@ -177,6 +177,10 @@ async def test_off_the_sheets_texts_go_out_as_they_are_without_listening(
     # The fixed hashtag of Ajustes first, and five at most.
     assert tiktok["tags"] == ["#micanal", "#gatos", "#datoscuriosos", "#lechedevaca", "#lactosa"]
     assert youtube["tags"] == ["#micanal", "#gatos", "#curiosidadesdegatos", "#lactosa"]
+    # No «— facebook —» block: the Reel's title is YouTube's, the rest TikTok's.
+    facebook = item["texts"]["facebook"]
+    assert facebook["title"] == youtube["title"]
+    assert facebook["description"] == tiktok["description"] and facebook["tags"] == tiktok["tags"]
     assert item["transcript"].startswith("El platito de leche")
 
     # Nothing to write: no Whisper, no Ollama, nothing waiting.

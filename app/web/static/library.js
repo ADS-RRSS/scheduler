@@ -1,4 +1,4 @@
-/* Biblioteca: every video once, with its texts for TikTok and YouTube, and the
+/* Biblioteca: every video once, with its texts for TikTok, YouTube and Facebook, and the
    picker a queue adds videos from. */
 
 import {
@@ -42,7 +42,7 @@ import {
     scopePicker,
 } from "./labels.js";
 
-const PLATFORMS = [["tiktok", "TikTok"], ["youtube", "YouTube"]];
+const PLATFORMS = [["tiktok", "TikTok"], ["youtube", "YouTube"], ["facebook", "Facebook"]];
 const PLATFORM_LABEL = Object.fromEntries(PLATFORMS);
 const VIDEO_RE = /\.(mp4|mov|webm)$/i;
 const TEXT_RE = /\.txt$/i;
@@ -321,7 +321,7 @@ function reviewBadge(item) {
     const badge = el("button", `badge review-badge ${r.errors ? "FAILED" : "UPLOADING"}`);
     badge.append(icon(r.errors ? "ban" : "alert"), String(r.errors + r.warnings));
     badge.type = "button";
-    badge.title = r.issues.map((i) => `${i.platform === "youtube" ? "YouTube" : "TikTok"}: ${i.message}`)
+    badge.title = r.issues.map((i) => `${Object.fromEntries(PLATFORMS)[i.platform] || "TikTok"}: ${i.message}`)
         .join("\n") + "\n\nClic para abrir sus textos.";
     badge.addEventListener("click", () => openTextsEditor(item));
     return badge;
@@ -376,7 +376,7 @@ function textLines(item) {
         const t = item.texts[key];
         const line = el("div", "lib-text");
         line.append(el("span", `lib-plat ${key}`, label));
-        const first = key === "youtube"
+        const first = key !== "tiktok"
             ? t.title || (t.description || "").split("\n")[0]
             : (t.description || "").split("\n")[0];
         line.append(el("span", "lib-text-body",
@@ -1306,7 +1306,7 @@ function storedAddFilter() {
     try {
         const v = JSON.parse(localStorage.getItem(ADD_FILTER_KEY) || "null") || {};
         return {
-            platform: ["tiktok", "youtube"].includes(v.platform) ? v.platform : "",
+            platform: ["tiktok", "youtube", "facebook"].includes(v.platform) ? v.platform : "",
             accounts: Array.isArray(v.accounts) ? v.accounts.filter(Number.isInteger) : null,
             hideTaken: v.hideTaken !== false,
         };
@@ -1743,7 +1743,7 @@ export async function openLibraryPicker(entry, queue) {
                 ? `ya en ${item.queued.filter((q) => q.account_id === entry.account.id).map((q) => `«${q.queue_name}»`).join(", ")}`
                 : item.preflight_errors.length ? "no pasa la validación"
                     : WRITING.includes(item.caption_status) ? "textos escribiéndose (llegarán solos)"
-                        : (platform === "youtube" ? t.title : (t.description || "").split("\n")[0]) || "sin texto";
+                        : (platform !== "tiktok" ? t.title || (t.description || "").split("\n")[0] : (t.description || "").split("\n")[0]) || "sin texto";
             main.append(el("span", "muted small",
                 (search.value.trim() || several() ? `${item.folder} · ` : "") + why));
             row.append(box, main);
@@ -2280,7 +2280,7 @@ export function wireLibrary() {
         const items = selectedItems();
         if (!items.length) return;
         if (!await confirmar(`Volver a escribir los textos de ${items.length} vídeo(s)`,
-            {text: "Los de TikTok y YouTube. Los que estén en cola siguiendo la biblioteca recibirán los nuevos.", ok: "Reescribir"})) return;
+            {text: "Los de TikTok, YouTube y Facebook. Los que estén en cola siguiendo la biblioteca recibirán los nuevos.", ok: "Reescribir"})) return;
         try {
             const res = await api("/api/library/bulk", {
                 method: "POST", body: JSON.stringify({action: "rewrite", ids: items.map((i) => i.id)}),
@@ -2296,7 +2296,7 @@ export function wireLibrary() {
         const items = selectedItems();
         if (!items.length) return;
         if (!await confirmar(`Poner a ${items.length} vídeo(s) los textos de su ficha`,
-            {text: "Los de TikTok y YouTube de su ficha .txt, tal cual. Sustituyen a los que tengan, también a los editados a mano.", ok: "Poner los de la ficha"})) return;
+            {text: "Los de TikTok, YouTube y Facebook de su ficha .txt, tal cual. Sustituyen a los que tengan, también a los editados a mano.", ok: "Poner los de la ficha"})) return;
         try {
             const res = await api("/api/library/bulk", {
                 method: "POST", body: JSON.stringify({action: "sheet", ids: items.map((i) => i.id)}),

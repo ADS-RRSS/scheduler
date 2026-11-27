@@ -50,8 +50,10 @@ from . import autocaption, captions, events, hashtags, media, queue, reelinfo, t
 
 log = logging.getLogger("scheduler")
 
-PLATFORMS = ("tiktok", "youtube")
-PLATFORM_LABELS = {"tiktok": "TikTok", "youtube": "YouTube"}
+PLATFORMS = ("tiktok", "youtube", "facebook")
+PLATFORM_LABELS = {"tiktok": "TikTok", "youtube": "YouTube", "facebook": "Facebook"}
+# Hashtags a Facebook post carries when its texts are borrowed from TikTok's: more read as spam there.
+FACEBOOK_MAX_TAGS = 5
 TEXT_FIELDS = ("title", "description", "tags", "first_comment")
 # VideoItem.caption_source of a queued video whose texts are the library's.
 FROM_LIBRARY = "biblioteca"
@@ -357,8 +359,18 @@ _reviews: dict[tuple, dict] = {}
 _REVIEWS_MAX = 5000
 
 
-def review(item: LibraryItem, fixed: tuple[str, ...] = ()) -> dict | None:
-    """The editor's checks on both platforms' texts, summed up for the list.
+def platforms_in_use(session: Session) -> tuple[str, ...]:
+    """The platforms with at least one connected account (TikTok when there is none yet)."""
+    used = set(session.scalars(select(Account.platform).distinct()))
+    return tuple(p for p in PLATFORMS if p in used) or ("tiktok",)
+
+
+def review(item: LibraryItem, fixed: tuple[str, ...] = (),
+           platforms: tuple[str, ...] = PLATFORMS) -> dict | None:
+    """The editor's checks on each platform's texts, summed up for the list.
+
+    ``platforms`` are the ones reviewed: those with an account (``platforms_in_use``),
+    so a Facebook text nobody will publish does not raise warnings.
 
     None while the texts are being written (there is nothing to review yet)
     or when the file does not pass the validation (it cannot be queued).
@@ -366,14 +378,14 @@ def review(item: LibraryItem, fixed: tuple[str, ...] = ()) -> dict | None:
     """
     if item.caption_status in WRITING or item.preflight_errors:
         return None
-    key = (item.id, item.updated_at, item.caption_status, tuple(fixed))
+    key = (item.id, item.updated_at, item.caption_status, tuple(fixed), platforms)
     cached = _reviews.get(key)
     if cached is not None:
         return cached
     ctx = textcheck.Context(fixed=tuple(fixed), source=item.transcript or "",
                             file_name=item.original_name)
     found = []
-    for platform in PLATFORMS:
+    for platform in platforms:
         texts = textcheck.Texts.of(**texts_of(item, platform))
         for issue in textcheck.check(texts, platform, ctx).issues:
             if issue.level in ("error", "warn"):
@@ -412,6 +424,12 @@ def sheet_texts(session: Session, sheet: reelinfo.ReelInfo, file_name: str = "")
     out: dict[str, dict] = {}
     for platform in PLATFORMS:
         own = sheet.texts_for(platform)
+        if own is None and platform == "facebook" and {"tiktok", "youtube"} <= out.keys():
+            # No Facebook block in the sheet (every sheet before Facebook): the
+            # Reel's title is YouTube's and the text, hashtags and comment TikTok's.
+            out[platform] = {**out["tiktok"], "title": out["youtube"]["title"],
+                             "tags": out["tiktok"]["tags"][:FACEBOOK_MAX_TAGS]}
+            continue
         if own is None:
             fallback = fallback or autocaption.sheet_fallback(sheet)
             title, description = fallback.title, fallback.caption

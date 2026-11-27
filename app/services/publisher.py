@@ -80,6 +80,23 @@ def aigc_for(item: VideoItem | None, schedule: Schedule | None) -> bool:
     return bool(schedule.is_aigc) if schedule is not None else False
 
 
+# A Facebook Reel: one vertical video of 3 to 60 seconds (Zernio's documentation).
+FACEBOOK_REEL_SECONDS = (3.0, 60.0)
+
+
+def facebook_reel(probe: dict | None) -> bool:
+    """Whether a video goes to a Facebook Page as a Reel. Otherwise it goes to the feed.
+
+    Vertical and within a Reel's duration; a probe without numbers (it should
+    not happen: the file was just checked) goes to the feed, which takes anything.
+    """
+    probe = probe or {}
+    seconds = float(probe.get("duration_sec") or 0)
+    width, height = int(probe.get("width") or 0), int(probe.get("height") or 0)
+    low, high = FACEBOOK_REEL_SECONDS
+    return bool(width and height > width and low <= seconds <= high)
+
+
 def post_options(
     schedule: Schedule,
     title: str,
@@ -107,6 +124,7 @@ def post_options(
         is_aigc=aigc_for(item, schedule),
         youtube_category_id=(schedule.account.youtube_category_id or "")
         if schedule.account is not None else "",
+        facebook_reel=facebook_reel(item.probe if item is not None else None),
     )
 
 

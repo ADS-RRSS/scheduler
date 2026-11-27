@@ -82,7 +82,7 @@ _HEADER_RE = re.compile(r"^—\s*(.+?)\s*—$")
 # Format 2: the first line says what the file is, and its version. Sheets
 # written before ContentBuilder was renamed still sign as PhrasesReels.
 _SIGNATURE_RE = re.compile(r"^\s*(?:ContentBuilder|PhrasesReels)\b.*?\bv\s*(\d+)\s*$", re.IGNORECASE)
-PLATFORMS = ("tiktok", "youtube")
+PLATFORMS = ("tiktok", "youtube", "facebook")
 # In format 2 the script comes last but one, and only these end it: a long
 # script may hold dialogue between dashes that looks like a header.
 _AFTER_SCRIPT = {"control", *PLATFORMS}
@@ -174,11 +174,15 @@ class ReelInfo:
 
         A sheet with only one platform (a long video has no TikTok section)
         lends it to the other, as «Copiar de TikTok» does in the editor.
+        Facebook only takes its own block: without one, None.
         None when the sheet brings no texts at all (format 1).
         """
         own = self.platforms.get(platform)
         if own is not None and not own.empty:
             return own
+        if platform == "facebook":
+            # Facebook mixes the two: YouTube's title, TikTok's text (library.sheet_texts).
+            return None
         other = next((t for p, t in self.platforms.items() if p != platform and not t.empty), None)
         if other is None:
             return None

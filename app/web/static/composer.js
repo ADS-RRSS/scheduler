@@ -15,10 +15,12 @@
 
 import {api, button, closeModal, confirmar, el, icon, openModal, toast} from "./shared.js";
 
-const LABEL = {tiktok: "TikTok", youtube: "YouTube"};
+const LABEL = {tiktok: "TikTok", youtube: "YouTube", facebook: "Facebook"};
 const LIMITS = {
     tiktok: {title: 100, caption: 2200, comment: 150, fold: 100, count: 5},
     youtube: {title: 100, caption: 5000, comment: null, fold: 100, count: 5, tagChars: 500},
+    /* textcheck.FACEBOOK_TEXT_MAX; the title is a Reel's only. */
+    facebook: {title: 100, caption: 5000, comment: null, fold: 100, count: 5},
 };
 /* TikTok counts the first five hashtags of a post (hashtags.TIKTOK_MAX_TAGS). */
 const COUNTED = 5;
@@ -379,9 +381,10 @@ export function openComposer(options) {
         const title = el("input");
         title.type = "text";
         title.value = t.title;
-        title.placeholder = platform === "youtube"
-            ? "Obligatorio en YouTube: el tema concreto, de 30 a 80 caracteres"
-            : "TikTok apenas lo usa; se envía igualmente";
+        title.placeholder = {
+            youtube: "Obligatorio en YouTube: el tema concreto, de 30 a 80 caracteres",
+            facebook: "Sólo lo llevan los Reels (vídeo vertical de hasta 60 s)",
+        }[platform] || "TikTok apenas lo usa; se envía igualmente";
         const titleCount = el("span", "counter");
 
         const description = el("textarea");
@@ -429,7 +432,7 @@ export function openComposer(options) {
         descField.append(foldLine);
         root.append(titleField, descField, tagsField, field("Comentario fijado", comment, commentCount));
 
-        if (platforms.length > 1 && platform === "youtube") {
+        if (platforms.length > 1 && platform !== "tiktok") {
             const copy = button("Copiar de TikTok", "btn btn-ghost btn-sm", () => {
                 const from = model.texts.tiktok;
                 t.description = from.description;
@@ -558,7 +561,7 @@ export function openComposer(options) {
             return card;
         }
         const p = report.preview;
-        if (platform === "youtube") {
+        if (platform === "youtube" || (platform === "facebook" && p.title)) {
             card.append(el("div", "preview-title", p.title || "— sin título —"));
         } else if (handle) {
             card.append(el("div", "preview-handle", handle));

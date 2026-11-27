@@ -4,6 +4,16 @@
 
 ### Añadido
 
+- **Páginas de Facebook.** Se conectan como las cuentas de TikTok y YouTube
+  («Buscar mis cuentas») y publican por Zernio con sus colas, reglas y
+  calendario. Un vídeo vertical de 3 a 60 s sale como **Reel** (con su título);
+  cualquier otro, como vídeo de la página. Facebook no lleva portada (Zernio no
+  la admite) ni lista de etiquetas: los hashtags van en el texto. La biblioteca
+  guarda textos de Facebook; una ficha sin bloque `— facebook —` le da el título
+  de YouTube y el texto, hashtags y comentario de TikTok. El editor tiene su
+  pestaña, con sus límites (5000 caracteres, más de 5 hashtags avisa), y el
+  aviso «⚠ N» de la biblioteca sólo cuenta las plataformas con alguna cuenta.
+
 - **Ajustes → Mantenimiento → Sin archivo en disco.** Tras traer la base de
   datos de otro Mac sin sus vídeos (el paquete de Tunnel sin «medios»), quita
   de las colas lo que espera un archivo que no está (en cola, programado o

@@ -44,6 +44,9 @@ ACCOUNTS = [
     {"_id": "acc_youtube_1", "platform": "youtube", "username": "@relay_canal",
      "displayName": "Relay Canal", "profileId": {"_id": "prof_1", "name": "Default"},
      "isActive": True, "profileUrl": "https://www.youtube.com/@relay_canal"},
+    {"_id": "acc_facebook_1", "platform": "facebook", "username": "Relay Página",
+     "displayName": "Relay Página", "profileId": {"_id": "prof_1", "name": "Default"},
+     "isActive": True, "profileUrl": "https://www.facebook.com/relaypagina"},
     {"_id": "acc_instagram_1", "platform": "instagram", "username": "@relay_user",
      "displayName": "Relay User", "profileId": {"_id": "prof_1", "name": "Default"},
      "isActive": True},
@@ -270,6 +273,18 @@ async def create_post(request: Request):
     if account_id not in known:
         return JSONResponse({"error": "Resource not found", "details": "accountId"}, 404)
     settings = _platform_settings(body, platform)
+    if platform == "facebook":
+        # A Page post: no TikTok settings, a Reel names itself, and only a Reel has a title.
+        data = platforms[0].get("platformSpecificData") or {}
+        if settings or body.get("facebookSettings", {}).get("privacy_level"):
+            return JSONResponse({"error": "invalid_field_value",
+                                 "details": "facebookSettings no admite ajustes de TikTok"}, 400)
+        if data.get("contentType") not in (None, "reel", "story"):
+            return JSONResponse({"error": "invalid_field_value",
+                                 "details": "platformSpecificData.contentType"}, 400)
+        if data.get("title") and data.get("contentType") != "reel":
+            return JSONResponse({"error": "invalid_field_value",
+                                 "details": "platformSpecificData.title sólo en Reels"}, 400)
     cover = settings.get("video_cover_image_url")
     if cover:
         thumbnail_key = cover.split("media.mock.invalid/", 1)[-1]
@@ -277,11 +292,11 @@ async def create_post(request: Request):
             return JSONResponse({"error": "invalid_field_value",
                                  "details": f"{platform}Settings.video_cover_image_url no está subido"}, 400)
     for flag in ("content_preview_confirmed", "express_consent_given"):
-        if settings.get(flag) is not True:
+        if platform != "facebook" and settings.get(flag) is not True:
             return JSONResponse({"error": "invalid_field_value",
                                  "details": f"{platform}Settings.{flag} must be true"}, 400)
     # The TikTok for Business app lane publishes videos publicly and nothing else.
-    if settings.get("privacy_level") != "PUBLIC_TO_EVERYONE":
+    if platform != "facebook" and settings.get("privacy_level") != "PUBLIC_TO_EVERYONE":
         return JSONResponse({"error": "invalid_field_value",
                              "details": f"{platform}Settings.privacy_level"}, 400)
     if not body.get("publishNow") and not body.get("scheduledFor"):
@@ -291,7 +306,9 @@ async def create_post(request: Request):
     post_id = f"zp_{secrets.token_hex(8)}"
     username = next(a["username"] for a in ACCOUNTS if a["_id"] == account_id).lstrip("@")
     video_id = str(secrets.randbelow(10**18))
-    url = f"https://www.tiktok.com/@{username}/video/{video_id}" if platform == "tiktok" else f"https://www.youtube.com/watch?v={video_id}"
+    url = {"tiktok": f"https://www.tiktok.com/@{username}/video/{video_id}",
+           "facebook": f"https://www.facebook.com/reel/{video_id}"}.get(
+        platform, f"https://www.youtube.com/watch?v={video_id}")
     POSTS[post_id] = {
         "id": post_id, "account_id": account_id, "polls": 0, "video_id": video_id,
         "platform": platform,

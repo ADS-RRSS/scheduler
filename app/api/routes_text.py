@@ -174,7 +174,7 @@ def hashtag_suggestions(
     the video says when looking for the topic.
     """
     if platform not in textcheck.PLATFORMS:
-        raise HTTPException(400, "platform debe ser tiktok o youtube.")
+        raise HTTPException(400, "platform debe ser tiktok, youtube o facebook.")
     settings = get_settings()
     subject = _subject(session, library_id, video_id)
     fixed = captions.stored_hashtags(session)
